@@ -3,10 +3,10 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Dict, Any, List
-from app.database import get_db
-from app.auth import get_current_user
-from app.models.security import SecurityEvent
-from app.services.breach_monitor import BreachMonitor
+from ..database import get_db
+from ..auth import get_current_user
+from ..models.security import SecurityEvent
+from ..services.breach_monitor import BreachMonitor
 
 router = APIRouter(prefix="/api/v1/breach", tags=["breach"])
 
@@ -18,7 +18,7 @@ monitor = BreachMonitor()
 @router.post("/check")
 async def check_email_breaches(
     request: EmailCheckRequest,
-    current_user = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     try:
@@ -27,13 +27,15 @@ async def check_email_breaches(
         severity = "high" if breaches else "low"
         
         security_event = SecurityEvent(
-            user_id=current_user.id,
-            event_type="breach_check",
             source="darkweb",
             severity=severity,
-            details={"email": request.email, "breach_count": len(breaches)},
-            timestamp=datetime.utcnow()
+            event_type="breach_check",
+            description=f"Email breach check for {request.email}",
+            user_id=current_user.get("id"),
+            timestamp=datetime.utcnow(),
+            metadata={"email": request.email, "breach_count": len(breaches)}
         )
+        
         db.add(security_event)
         db.commit()
         
