@@ -1,0 +1,390 @@
+import os
+import sys
+import subprocess
+import shutil
+from pathlib import Path
+import PyInstaller.__main__
+
+def is_running_as_exe():
+    """Check if the application is running as a PyInstaller executable."""
+    return getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')
+
+def get_resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller."""
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    
+    return os.path.join(base_path, relative_path)
+
+def create_spec_file():
+    """Create PyInstaller spec file with custom configuration."""
+    spec_content = """
+# -*- mode: python ; coding: utf-8 -*-
+
+block_cipher = None
+
+a = Analysis(
+    ['agent.py'],
+    pathex=[],
+    binaries=[],
+    datas=[
+        ('config.py', '.'),
+        ('scanner.py', '.'),
+    ],
+    hiddenimports=[
+        'clamd',
+        'psutil',
+        'requests',
+        'urllib3',
+        'certifi',
+        'charset_normalizer',
+        'idna',
+        'socket',
+        'threading',
+        'json',
+        'datetime',
+        'logging',
+        'hashlib',
+        'subprocess',
+        'platform',
+        'tempfile',
+        'shutil',
+        'pathlib'
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    [],
+    name='CyberSecAgent',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=True,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    version='version_info.txt',
+    icon='icon.ico'
+)
+"""
+    
+    with open('cybersec_agent.spec', 'w') as f:
+        f.write(spec_content.strip())
+
+def create_version_info():
+    """Create version info file for Windows executable."""
+    version_content = """
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(1, 0, 0, 0),
+    prodvers=(1, 0, 0, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x4,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo(
+      [
+        StringTable(
+          u'040904B0',
+          [StringStruct(u'CompanyName', u'CyberSec Suite'),
+           StringStruct(u'FileDescription', u'CyberSec Agent - Security Scanner'),
+           StringStruct(u'FileVersion', u'1.0.0.0'),
+           StringStruct(u'InternalName', u'CyberSecAgent'),
+           StringStruct(u'LegalCopyright', u'Copyright © 2024'),
+           StringStruct(u'OriginalFilename', u'CyberSecAgent.exe'),
+           StringStruct(u'ProductName', u'CyberSec Agent'),
+           StringStruct(u'ProductVersion', u'1.0.0.0')])
+      ]), 
+    VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
+  ]
+)
+"""
+    
+    with open('version_info.txt', 'w') as f:
+        f.write(version_content.strip())
+
+def create_default_icon():
+    """Create a simple default icon if none exists."""
+    if not os.path.exists('icon.ico'):
+        # Create a simple text file as placeholder
+        # In production, replace with actual .ico file
+        with open('icon.ico', 'w') as f:
+            f.write('# Placeholder for icon.ico file\n# Replace with actual Windows .ico file')
+
+def create_readme():
+    """Create installation README file."""
+    readme_content = """
+# CyberSec Agent Installation Guide
+
+## Overview
+CyberSec Agent is a standalone security scanning tool that provides real-time malware detection,
+system monitoring, and security analysis without requiring Python installation.
+
+## Installation Instructions
+
+### Method 1: Direct Execution (Recommended)
+1. Download CyberSecAgent.exe from the dist/ folder
+2. Double-click CyberSecAgent.exe to run
+3. No additional installation required
+
+### Method 2: System Installation
+1. Copy CyberSecAgent.exe to desired location (e.g., C:\\Program Files\\CyberSecAgent\\)
+2. Create desktop shortcut if needed
+3. Run as Administrator for full system access
+
+## Requirements
+- Windows 7 SP1 / Windows 10 / Windows 11
+- Administrator privileges (recommended)
+- Internet connection for threat intelligence updates
+- Minimum 100MB free disk space
+
+## Features
+- Real-time malware scanning
+- System process monitoring
+- Network connection analysis
+- File integrity checking
+- Automated threat detection
+- Log file generation
+
+## Configuration
+Configuration is handled through the built-in config.py module.
+Default settings work for most users.
+
+To customize settings:
+1. Run CyberSecAgent.exe --config
+2. Follow the interactive configuration prompts
+
+## Usage
+
+### Basic Scan
+CyberSecAgent.exe --scan
+
+### Full System Scan
+CyberSecAgent.exe --full-scan
+
+### Monitor Mode (Real-time)
+CyberSecAgent.exe --monitor
+
+### Show Help
+CyberSecAgent.exe --help
+
+## Log Files
+Logs are automatically generated in the same directory as the executable:
+- cybersec_agent.log - General application logs
+- scan_results.log - Scan results and detections
+- alerts.log - Security alerts and warnings
+
+## Troubleshooting
+
+### Common Issues
+
+**"Windows protected your PC" warning:**
+- Click "More info" then "Run anyway"
+- This is normal for unsigned executables
+
+**Permission denied errors:**
+- Run as Administrator
+- Check Windows Defender exclusions
+
+**Slow performance:**
+- Close unnecessary applications
+- Run during low system usage periods
+- Check available disk space
+
+**False positives:**
+- Review scan logs for details
+- Add exclusions if necessary
+- Report issues for investigation
+
+### Getting Help
+1. Check log files for error details
+2. Run with --verbose flag for detailed output
+3. Ensure all dependencies are met
+
+## Security Notes
+- Run regular scans for optimal protection
+- Keep the executable updated
+- Review scan results carefully
+- Backup important files before remediation
+
+## Uninstallation
+1. Delete CyberSecAgent.exe
+2. Delete associated log files
+3. Remove any desktop shortcuts
+4. No registry cleanup required
+
+## Updates
+Download the latest version and replace the existing executable.
+Configuration settings are preserved automatically.
+
+## Technical Support
+For technical support and bug reports, please provide:
+- Windows version
+- Error messages from log files
+- Steps to reproduce issues
+- System specifications
+
+---
+CyberSec Agent v1.0.0
+Built with PyInstaller for maximum compatibility
+"""
+    
+    with open('README_INSTALLATION.md', 'w') as f:
+        f.write(readme_content.strip())
+
+def build_installer():
+    """Build the Windows executable using PyInstaller."""
+    print("Starting CyberSec Agent installer build...")
+    
+    # Check if required files exist
+    required_files = ['agent.py', 'scanner.py', 'config.py']
+    for file in required_files:
+        if not os.path.exists(file):
+            print(f"Error: Required file {file} not found!")
+            return False
+    
+    # Create build directory
+    os.makedirs('dist', exist_ok=True)
+    os.makedirs('build', exist_ok=True)
+    
+    # Create supporting files
+    create_spec_file()
+    create_version_info()
+    create_default_icon()
+    create_readme()
+    
+    try:
+        # Run PyInstaller with spec file
+        print("Building executable with PyInstaller...")
+        PyInstaller.__main__.run([
+            'cybersec_agent.spec',
+            '--clean',
+            '--noconfirm'
+        ])
+        
+        # Copy README to dist folder
+        if os.path.exists('README_INSTALLATION.md'):
+            shutil.copy('README_INSTALLATION.md', 'dist/')
+        
+        print("Build completed successfully!")
+        print("Executable location: dist/CyberSecAgent.exe")
+        print("Installation guide: dist/README_INSTALLATION.md")
+        
+        return True
+        
+    except Exception as e:
+        print(f"Build failed: {str(e)}")
+        return False
+
+def clean_build_files():
+    """Clean up temporary build files."""
+    cleanup_items = [
+        'build',
+        '__pycache__',
+        '*.spec',
+        'version_info.txt',
+        'cybersec_agent.spec'
+    ]
+    
+    for item in cleanup_items:
+        if os.path.exists(item):
+            if os.path.isdir(item):
+                shutil.rmtree(item)
+            else:
+                os.remove(item)
+
+def test_executable():
+    """Test if the built executable works."""
+    exe_path = os.path.join('dist', 'CyberSecAgent.exe')
+    if os.path.exists(exe_path):
+        try:
+            # Test basic execution
+            result = subprocess.run([exe_path, '--version'], 
+                                 capture_output=True, text=True, timeout=30)
+            if result.returncode == 0:
+                print("Executable test passed!")
+                return True
+            else:
+                print(f"Executable test failed: {result.stderr}")
+                return False
+        except subprocess.TimeoutExpired:
+            print("Executable test timed out")
+            return False
+        except Exception as e:
+            print(f"Executable test error: {str(e)}")
+            return False
+    else:
+        print("Executable not found for testing")
+        return False
+
+def main():
+    """Main installer function."""
+    print("CyberSec Agent Installer Builder")
+    print("=" * 40)
+    
+    if len(sys.argv) > 1:
+        if sys.argv[1] == '--clean':
+            clean_build_files()
+            print("Build files cleaned.")
+            return
+        elif sys.argv[1] == '--test':
+            test_executable()
+            return
+        elif sys.argv[1] == '--build':
+            pass  # Continue with build
+        else:
+            print("Usage: python installer.py [--build|--clean|--test]")
+            return
+    
+    # Build the installer
+    success = build_installer()
+    
+    if success:
+        print("\nBuild Summary:")
+        print("- Executable: dist/CyberSecAgent.exe")
+        print("- Size:", os.path.getsize('dist/CyberSecAgent.exe') // 1024 // 1024, "MB")
+        print("- Installation guide: dist/README_INSTALLATION.md")
+        
+        # Optional cleanup
+        response = input("\nClean temporary files? (y/N): ")
+        if response.lower() == 'y':
+            clean_build_files()
+            print("Temporary files cleaned.")
+        
+        # Optional test
+        response = input("Test executable? (y/N): ")
+        if response.lower() == 'y':
+            test_executable()
+    
+    else:
+        print("Build failed. Check error messages above.")
+
+if __name__ == "__main__":
+    main()

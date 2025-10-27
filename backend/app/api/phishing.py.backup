@@ -1,0 +1,46 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from datetime import datetime
+from typing import Dict, Any
+from app.database import get_db
+from app.auth import get_current_user
+from app.models.security import SecurityEvent
+from app.services.phishing_detector import PhishingDetector
+
+router = APIRouter(prefix="/api/v1/phishing", tags=["phishing"])
+
+class URLCheckRequest(BaseModel):
+    url: str
+
+detector = PhishingDetector()
+
+@router.post("/check")
+def check_url(
+    request: URLCheckRequest,
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        result = detector.check_url(request.url)
+        
+        # Determine severity based on threat level
+        is_threat = result.get("is_phishing", False)
+        severity = "high" if is_threat else "low"
+        
+        # Log to SecurityEvent table
+        security_event = SecurityEvent(
+            source="phishing",
+            severity=severity,
+            description=f"URL check for {request.url}",
+            details=result,
+            timestamp=datetime.utcnow(),
+            user_id=current_user.id
+        )
+        db.add(security_event)
+        db.commit()
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

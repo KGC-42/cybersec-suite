@@ -1,0 +1,45 @@
+@echo off
+echo Building CyberSec Agent Windows Installer...
+echo.
+
+echo Cleaning previous build artifacts...
+if exist dist (
+    rmdir /s /q dist
+    if errorlevel 1 (
+        echo Error: Failed to remove dist folder
+        goto error
+    )
+)
+
+if exist build (
+    rmdir /s /q build
+    if errorlevel 1 (
+        echo Error: Failed to remove build folder
+        goto error
+    )
+)
+
+echo Build folders cleaned successfully.
+echo.
+
+echo Starting PyInstaller build process...
+pyinstaller agent.py --onefile --name CyberSecAgent --hidden-import=clamd --hidden-import=psutil --clean
+
+if errorlevel 1 (
+    echo Error: PyInstaller build failed
+    goto error
+)
+
+echo.
+echo Build completed successfully!
+echo Executable created: dist\CyberSecAgent.exe
+echo.
+goto end
+
+:error
+echo.
+echo Build failed! Please check the error messages above.
+echo.
+
+:end
+pause

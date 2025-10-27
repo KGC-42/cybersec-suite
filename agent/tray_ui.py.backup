@@ -1,0 +1,209 @@
+import pystray
+import subprocess
+import threading
+import time
+import webbrowser
+import tkinter as tk
+from tkinter import messagebox
+from PIL import Image, ImageDraw
+import os
+import sys
+import json
+from datetime import datetime
+
+class CyberSecTrayApp:
+    def __init__(self):
+        self.agent_process = None
+        self.is_running = False
+        self.status_data = {
+            'status': 'Stopped',
+            'last_scan': 'Never',
+            'threats_found': 0
+        }
+        self.icon = None
+        
+        # Create icons
+        self.green_icon = self.create_icon((0, 255, 0))
+        self.red_icon = self.create_icon((255, 0, 0))
+        
+        # Auto-start agent
+        threading.Thread(target=self.start_agent, daemon=True).start()
+    
+    def create_icon(self, color):
+        """Create a simple colored dot icon using PIL"""
+        try:
+            image = Image.new('RGB', (64, 64), color=(255, 255, 255))
+            draw = ImageDraw.Draw(image)
+            draw.ellipse([10, 10, 54, 54], fill=color, outline=(0, 0, 0))
+            return image
+        except Exception as e:
+            print(f"Error creating icon: {e}")
+            # Return a simple default image if PIL fails
+            return Image.new('RGB', (64, 64), color=color)
+    
+    def start_agent(self):
+        """Start the agent as a subprocess"""
+        try:
+            if not self.is_running:
+                agent_path = os.path.join(os.path.dirname(__file__), 'agent.py')
+                if os.path.exists(agent_path):
+                    self.agent_process = subprocess.Popen([sys.executable, agent_path])
+                    self.is_running = True
+                    self.status_data['status'] = 'Running'
+                    self.status_data['last_scan'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    self.update_icon()
+                    print("Agent started successfully")
+                else:
+                    print("Agent.py not found")
+        except Exception as e:
+            print(f"Error starting agent: {e}")
+            self.show_error("Failed to start agent", str(e))
+    
+    def stop_agent(self):
+        """Stop the agent subprocess"""
+        try:
+            if self.is_running and self.agent_process:
+                self.agent_process.terminate()
+                self.agent_process.wait()
+                self.agent_process = None
+                self.is_running = False
+                self.status_data['status'] = 'Stopped'
+                self.update_icon()
+                print("Agent stopped successfully")
+        except Exception as e:
+            print(f"Error stopping agent: {e}")
+            self.show_error("Failed to stop agent", str(e))
+    
+    def update_icon(self):
+        """Update the tray icon based on agent status"""
+        try:
+            if self.icon:
+                if self.is_running:
+                    self.icon.icon = self.green_icon
+                else:
+                    self.icon.icon = self.red_icon
+        except Exception as e:
+            print(f"Error updating icon: {e}")
+    
+    def open_dashboard(self):
+        """Open the dashboard in web browser"""
+        try:
+            webbrowser.open('https://cybersec-suite.vercel.app/dashboard')
+        except Exception as e:
+            print(f"Error opening dashboard: {e}")
+            self.show_error("Failed to open dashboard", str(e))
+    
+    def view_status(self):
+        """Show status popup window"""
+        try:
+            # Use threading to prevent blocking
+            threading.Thread(target=self._show_status_popup, daemon=True).start()
+        except Exception as e:
+            print(f"Error showing status: {e}")
+    
+    def _show_status_popup(self):
+        """Show status in a popup window"""
+        try:
+            root = tk.Tk()
+            root.withdraw()  # Hide the main window
+            
+            status_text = f"""CyberSec Agent Status
+            
+Status: {self.status_data['status']}
+Last Scan: {self.status_data['last_scan']}
+Threats Found: {self.status_data['threats_found']}
+Process ID: {self.agent_process.pid if self.agent_process else 'N/A'}"""
+            
+            messagebox.showinfo("Agent Status", status_text)
+            root.destroy()
+        except Exception as e:
+            print(f"Error in status popup: {e}")
+    
+    def show_error(self, title, message):
+        """Show error message in popup"""
+        try:
+            root = tk.Tk()
+            root.withdraw()
+            messagebox.showerror(title, message)
+            root.destroy()
+        except Exception as e:
+            print(f"Error showing error popup: {e}")
+    
+    def on_start_agent(self, icon, item):
+        """Menu callback to start agent"""
+        if not self.is_running:
+            threading.Thread(target=self.start_agent, daemon=True).start()
+    
+    def on_stop_agent(self, icon, item):
+        """Menu callback to stop agent"""
+        if self.is_running:
+            threading.Thread(target=self.stop_agent, daemon=True).start()
+    
+    def on_view_status(self, icon, item):
+        """Menu callback to view status"""
+        self.view_status()
+    
+    def on_open_dashboard(self, icon, item):
+        """Menu callback to open dashboard"""
+        self.open_dashboard()
+    
+    def on_exit(self, icon, item):
+        """Menu callback to exit application"""
+        try:
+            self.stop_agent()
+            icon.stop()
+        except Exception as e:
+            print(f"Error during exit: {e}")
+    
+    def create_menu(self):
+        """Create the context menu for the tray icon"""
+        return pystray.Menu(
+            pystray.MenuItem("Start Agent", self.on_start_agent),
+            pystray.MenuItem("Stop Agent", self.on_stop_agent),
+            pystray.MenuItem("View Status", self.on_view_status),
+            pystray.MenuItem("Open Dashboard", self.on_open_dashboard),
+            pystray.MenuItem("Exit", self.on_exit)
+        )
+    
+    def run(self):
+        """Run the tray application"""
+        try:
+            self.icon = pystray.Icon(
+                "CyberSec Agent",
+                self.red_icon,  # Start with red icon
+                "CyberSec Agent",
+                self.create_menu()
+            )
+            
+            # Update icon after a short delay to allow auto-start
+            def delayed_update():
+                time.sleep(2)
+                self.update_icon()
+            
+            threading.Thread(target=delayed_update, daemon=True).start()
+            
+            # Run the icon (this blocks)
+            self.icon.run()
+            
+        except Exception as e:
+            print(f"Error running tray application: {e}")
+            self.show_error("Tray Application Error", str(e))
+
+def main():
+    """Main entry point"""
+    try:
+        app = CyberSecTrayApp()
+        app.run()
+    except Exception as e:
+        print(f"Fatal error: {e}")
+        # Try to show error even if tray fails
+        try:
+            root = tk.Tk()
+            root.withdraw()
+            messagebox.showerror("Fatal Error", f"Failed to start CyberSec tray application:\n{str(e)}")
+            root.destroy()
+        except:
+            pass
+
+if __name__ == "__main__":
+    main()

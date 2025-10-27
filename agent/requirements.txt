@@ -1,0 +1,71 @@
+# CyberSec Suite Agent - Dependencies
+
+# Core HTTP functionality
+requests>=2.31.0,<3.0.0
+urllib3>=2.0.7,<3.0.0
+
+# Cryptography and security
+cryptography>=41.0.7,<42.0.0
+bcrypt>=4.1.2,<5.0.0
+
+# Configuration and data handling
+PyYAML>=6.0.1,<7.0.0
+python-dotenv>=1.0.0,<2.0.0
+
+# Logging and monitoring
+colorlog>=6.8.0,<7.0.0
+
+# System integration
+psutil>=5.9.6,<6.0.0
+
+# Network utilities
+netifaces>=0.11.0,<1.0.0
+
+# JSON Web Tokens for secure authentication
+PyJWT>=2.8.0,<3.0.0
+
+# HTTP server for agent endpoints
+flask>=3.0.0,<4.0.0
+werkzeug>=3.0.0,<4.0.0
+
+# Async support
+aiohttp>=3.9.0,<4.0.0
+aiofiles>=23.2.1,<24.0.0
+
+# Certificate validation
+certifi>=2023.11.17
+
+# Process management
+supervisor>=4.2.5,<5.0.0
+
+# Security scanning and analysis
+python-nmap>=0.7.1,<1.0.0
+scapy>=2.5.0,<3.0.0
+
+# Database support
+sqlalchemy>=2.0.0,<3.0.0
+
+# Time handling
+pytz>=2023.3
+
+# Additional security libraries
+paramiko>=3.3.1,<4.0.0
+click>=8.1.7,<9.0.0
+
+# Testing dependencies
+pytest>=7.4.3,<8.0.0
+pytest-cov>=4.1.0,<5.0.0
+pytest-asyncio>=0.21.1,<1.0.0
+
+# JSON handling
+jsonschema>=4.20.0,<5.0.0
+
+# XML processing
+lxml>=4.9.3,<5.0.0
+
+# Network security
+dnspython>=2.4.2,<3.0.0
+
+# Additional crypto support
+pycryptodome>=3.19.0,<4.0.0
+clamd==1.0.2
