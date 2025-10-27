@@ -3,10 +3,10 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Dict, Any, List
-from ..database import get_db
-from ..auth import get_current_user
-from ..models.security import SecurityEvent
-from ..services.breach_monitor import BreachMonitor
+from app.database import get_db
+from app.auth import get_current_user
+from app.models.security import SecurityEvent
+from app.services.breach_monitor import BreachMonitor
 
 router = APIRouter(prefix="/api/v1/breach", tags=["breach"])
 
@@ -16,28 +16,29 @@ class EmailCheckRequest(BaseModel):
 monitor = BreachMonitor()
 
 @router.post("/check")
-async def check_breach(
+async def check_email_breaches(
     request: EmailCheckRequest,
-    current_user = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     try:
         breaches = await monitor.check_email(request.email)
         
-        # Log the check to SecurityEvent
         severity = "high" if breaches else "low"
-        event = SecurityEvent(
-            user_id=current_user.id,
-            event_type="breach_check",
+        
+        security_event = SecurityEvent(
             source="darkweb",
             severity=severity,
-            details={"email": request.email, "breaches_found": len(breaches)},
+            event_type="breach_check",
+            description=f"Email breach check for {request.email}",
+            user_id=current_user.id,
             timestamp=datetime.utcnow()
         )
-        db.add(event)
+        
+        db.add(security_event)
         db.commit()
         
         return {"breaches": breaches}
-    
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
