@@ -1,176 +1,264 @@
+import sys
+import os
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
-from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
-from ..models.security_event import SecurityEvent
-from ..database import get_db
+from typing import Dict, List, Optional, Tuple
 import json
 from dataclasses import dataclass
+
+# Add the parent directory to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    from models.security_event import SecurityEvent
+    from database import SessionLocal
+except ImportError:
+    # Fallback imports
+    import importlib.util
+    
+    # Load SecurityEvent model
+    spec = importlib.util.spec_from_file_location("security_event", 
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", "security_event.py"))
+    security_event_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(security_event_module)
+    SecurityEvent = security_event_module.SecurityEvent
+    
+    # Load database session
+    db_spec = importlib.util.spec_from_file_location("database", 
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "database.py"))
+    db_module = importlib.util.module_from_spec(db_spec)
+    db_spec.loader.exec_module(db_module)
+    SessionLocal = db_module.SessionLocal
 
 @dataclass
 class SecurityStats:
     total_alerts: int
-    critical_count: int
-    high_count: int
-    medium_count: int
-    low_count: int
-    info_count: int
-    source_type_breakdown: Dict[str, int]
-    daily_breakdown: Dict[str, int]
-    top_sources: List[Dict[str, Any]]
+    by_severity: Dict[str, int]
+    by_source_type: Dict[str, int]
     risk_score: float
+    high_priority_events: List[Dict]
+    breach_indicators: List[Dict]
 
 class ReportGenerator:
-    def __init__(self, db: Session = None):
-        self.db = db or next(get_db())
+    def __init__(self):
+        self.db = None
     
-    def generate_weekly_report(self, end_date: Optional[datetime] = None) -> Dict[str, Any]:
-        """Generate comprehensive weekly security report"""
+    def _get_db_session(self):
+        if not self.db:
+            self.db = SessionLocal()
+        return self.db
+    
+    def _close_db_session(self):
+        if self.db:
+            self.db.close()
+            self.db = None
+    
+    def fetch_weekly_security_events(self, end_date: Optional[datetime] = None) -> List[SecurityEvent]:
+        """Fetch security events from the last 7 days"""
         if end_date is None:
             end_date = datetime.utcnow()
         
         start_date = end_date - timedelta(days=7)
         
-        # Fetch security events from last 7 days
-        events = self._fetch_events(start_date, end_date)
+        db = self._get_db_session()
+        try:
+            events = db.query(SecurityEvent).filter(
+                SecurityEvent.created_at >= start_date,
+                SecurityEvent.created_at <= end_date
+            ).all()
+            return events
+        finally:
+            self._close_db_session()
+    
+    def calculate_security_stats(self, events: List[SecurityEvent]) -> SecurityStats:
+        """Calculate comprehensive security statistics"""
+        total_alerts = len(events)
         
-        # Calculate statistics
-        stats = self._calculate_stats(events)
+        # Count by severity
+        by_severity = {}
+        for event in events:
+            severity = event.severity or 'unknown'
+            by_severity[severity] = by_severity.get(severity, 0) + 1
         
-        # Generate breach analysis
-        breach_analysis = self._analyze_breaches(events)
+        # Count by source type
+        by_source_type = {}
+        for event in events:
+            source_type = event.source_type or 'unknown'
+            by_source_type[source_type] = by_source_type.get(source_type, 0) + 1
         
-        # Create report structure
+        # Calculate risk score (0-100)
+        risk_score = self._calculate_risk_score(events, by_severity)
+        
+        # Identify high priority events
+        high_priority_events = [
+            {
+                'id': event.id,
+                'event_type': event.event_type,
+                'severity': event.severity,
+                'source_ip': event.source_ip,
+                'created_at': event.created_at.isoformat() if event.created_at else None,
+                'description': event.description
+            }
+            for event in events 
+            if event.severity in ['critical', 'high']
+        ]
+        
+        # Analyze potential breach indicators
+        breach_indicators = self._analyze_breach_indicators(events)
+        
+        return SecurityStats(
+            total_alerts=total_alerts,
+            by_severity=by_severity,
+            by_source_type=by_source_type,
+            risk_score=risk_score,
+            high_priority_events=high_priority_events,
+            breach_indicators=breach_indicators
+        )
+    
+    def _calculate_risk_score(self, events: List[SecurityEvent], by_severity: Dict[str, int]) -> float:
+        """Calculate overall risk score based on events and severity distribution"""
+        if not events:
+            return 0.0
+        
+        severity_weights = {
+            'critical': 10,
+            'high': 7,
+            'medium': 4,
+            'low': 2,
+            'info': 1,
+            'unknown': 3
+        }
+        
+        total_weighted_score = 0
+        max_possible_score = 0
+        
+        for severity, count in by_severity.items():
+            weight = severity_weights.get(severity.lower(), 3)
+            total_weighted_score += count * weight
+            max_possible_score += count * 10  # Max weight is 10
+        
+        if max_possible_score == 0:
+            return 0.0
+        
+        base_score = (total_weighted_score / max_possible_score) * 100
+        
+        # Adjust for volume (more events = higher risk)
+        volume_multiplier = min(1.2, 1 + (len(events) / 1000))
+        
+        return min(100.0, base_score * volume_multiplier)
+    
+    def _analyze_breach_indicators(self, events: List[SecurityEvent]) -> List[Dict]:
+        """Analyze events for potential breach indicators"""
+        breach_indicators = []
+        
+        # Group events by source IP
+        ip_events = {}
+        for event in events:
+            if event.source_ip:
+                if event.source_ip not in ip_events:
+                    ip_events[event.source_ip] = []
+                ip_events[event.source_ip].append(event)
+        
+        # Look for suspicious patterns
+        for ip, ip_event_list in ip_events.items():
+            # Multiple high-severity events from same IP
+            high_severity_count = sum(1 for e in ip_event_list if e.severity in ['critical', 'high'])
+            if high_severity_count >= 3:
+                breach_indicators.append({
+                    'type': 'multiple_high_severity_from_ip',
+                    'source_ip': ip,
+                    'count': high_severity_count,
+                    'description': f'Multiple high-severity events ({high_severity_count}) from IP {ip}',
+                    'risk_level': 'high'
+                })
+            
+            # High volume from single IP
+            if len(ip_event_list) >= 20:
+                breach_indicators.append({
+                    'type': 'high_volume_from_ip',
+                    'source_ip': ip,
+                    'count': len(ip_event_list),
+                    'description': f'High volume of events ({len(ip_event_list)}) from IP {ip}',
+                    'risk_level': 'medium'
+                })
+        
+        # Look for authentication failures
+        auth_failures = [e for e in events if 'auth' in (e.event_type or '').lower() or 'login' in (e.event_type or '').lower()]
+        if len(auth_failures) >= 10:
+            breach_indicators.append({
+                'type': 'multiple_auth_failures',
+                'count': len(auth_failures),
+                'description': f'Multiple authentication failures detected ({len(auth_failures)})',
+                'risk_level': 'medium'
+            })
+        
+        return breach_indicators
+    
+    def generate_weekly_report(self, end_date: Optional[datetime] = None) -> Dict:
+        """Generate complete weekly security report"""
+        if end_date is None:
+            end_date = datetime.utcnow()
+        
+        start_date = end_date - timedelta(days=7)
+        
+        # Fetch events and calculate stats
+        events = self.fetch_weekly_security_events(end_date)
+        stats = self.calculate_security_stats(events)
+        
+        # Generate summary
+        summary = self._generate_summary(stats, start_date, end_date)
+        
         report = {
-            "report_id": f"weekly_{end_date.strftime('%Y%m%d')}",
-            "generated_at": datetime.utcnow().isoformat(),
-            "period": {
-                "start_date": start_date.isoformat(),
-                "end_date": end_date.isoformat()
+            'report_id': f"weekly_report_{int(end_date.timestamp())}",
+            'generated_at': datetime.utcnow().isoformat(),
+            'period': {
+                'start_date': start_date.isoformat(),
+                'end_date': end_date.isoformat()
             },
-            "summary": {
-                "total_alerts": stats.total_alerts,
-                "risk_score": stats.risk_score,
-                "risk_level": self._get_risk_level(stats.risk_score),
-                "critical_alerts": stats.critical_count,
-                "trend": self._calculate_trend(events)
+            'summary': summary,
+            'statistics': {
+                'total_alerts': stats.total_alerts,
+                'by_severity': stats.by_severity,
+                'by_source_type': stats.by_source_type,
+                'risk_score': round(stats.risk_score, 2)
             },
-            "statistics": {
-                "severity_breakdown": {
-                    "critical": stats.critical_count,
-                    "high": stats.high_count,
-                    "medium": stats.medium_count,
-                    "low": stats.low_count,
-                    "info": stats.info_count
-                },
-                "source_type_breakdown": stats.source_type_breakdown,
-                "daily_breakdown": stats.daily_breakdown,
-                "top_sources": stats.top_sources
-            },
-            "breach_analysis": breach_analysis,
-            "recommendations": self._generate_recommendations(stats, breach_analysis)
+            'high_priority_events': stats.high_priority_events[:10],  # Limit to top 10
+            'breach_analysis': {
+                'indicators_found': len(stats.breach_indicators),
+                'indicators': stats.breach_indicators,
+                'risk_assessment': self._assess_breach_risk(stats.breach_indicators)
+            }
         }
         
         return report
     
-    def _fetch_events(self, start_date: datetime, end_date: datetime) -> List[SecurityEvent]:
-        """Fetch security events from the specified date range"""
-        return self.db.query(SecurityEvent).filter(
-            and_(
-                SecurityEvent.timestamp >= start_date,
-                SecurityEvent.timestamp <= end_date
-            )
-        ).all()
-    
-    def _calculate_stats(self, events: List[SecurityEvent]) -> SecurityStats:
-        """Calculate comprehensive statistics from events"""
-        total_alerts = len(events)
+    def _generate_summary(self, stats: SecurityStats, start_date: datetime, end_date: datetime) -> str:
+        """Generate executive summary of the security report"""
+        risk_level = self._get_risk_level(stats.risk_score)
         
-        # Severity breakdown
-        severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
-        source_type_breakdown = {}
-        daily_breakdown = {}
-        source_stats = {}
+        summary = f"""Security Report Summary ({start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')})
+
+Total Security Events: {stats.total_alerts}
+Overall Risk Score: {stats.risk_score:.1f}/100 ({risk_level})
+
+Severity Breakdown:
+"""
         
-        for event in events:
-            # Severity counts
-            severity = event.severity.lower() if event.severity else "info"
-            if severity in severity_counts:
-                severity_counts[severity] += 1
-            
-            # Source type breakdown
-            source_type = event.source_type or "unknown"
-            source_type_breakdown[source_type] = source_type_breakdown.get(source_type, 0) + 1
-            
-            # Daily breakdown
-            day = event.timestamp.strftime("%Y-%m-%d")
-            daily_breakdown[day] = daily_breakdown.get(day, 0) + 1
-            
-            # Source statistics
-            source = event.source_ip or event.source_host or "unknown"
-            if source not in source_stats:
-                source_stats[source] = {"count": 0, "severities": set(), "types": set()}
-            source_stats[source]["count"] += 1
-            source_stats[source]["severities"].add(severity)
-            source_stats[source]["types"].add(source_type)
+        for severity, count in sorted(stats.by_severity.items(), key=lambda x: x[1], reverse=True):
+            percentage = (count / stats.total_alerts * 100) if stats.total_alerts > 0 else 0
+            summary += f"- {severity.title()}: {count} ({percentage:.1f}%)\n"
         
-        # Top sources
-        top_sources = sorted(
-            [
-                {
-                    "source": source,
-                    "count": data["count"],
-                    "severities": list(data["severities"]),
-                    "types": list(data["types"])
-                }
-                for source, data in source_stats.items()
-            ],
-            key=lambda x: x["count"],
-            reverse=True
-        )[:10]
+        summary += f"\nHigh Priority Events: {len(stats.high_priority_events)}\n"
+        summary += f"Breach Indicators: {len(stats.breach_indicators)}\n"
         
-        # Calculate risk score
-        risk_score = self._calculate_risk_score(severity_counts, total_alerts)
+        if stats.breach_indicators:
+            summary += f"\nKey Concerns:\n"
+            for indicator in stats.breach_indicators[:3]:  # Top 3 concerns
+                summary += f"- {indicator['description']}\n"
         
-        return SecurityStats(
-            total_alerts=total_alerts,
-            critical_count=severity_counts["critical"],
-            high_count=severity_counts["high"],
-            medium_count=severity_counts["medium"],
-            low_count=severity_counts["low"],
-            info_count=severity_counts["info"],
-            source_type_breakdown=source_type_breakdown,
-            daily_breakdown=daily_breakdown,
-            top_sources=top_sources,
-            risk_score=risk_score
-        )
-    
-    def _calculate_risk_score(self, severity_counts: Dict[str, int], total_alerts: int) -> float:
-        """Calculate overall risk score based on severity distribution"""
-        if total_alerts == 0:
-            return 0.0
-        
-        weights = {
-            "critical": 10.0,
-            "high": 7.5,
-            "medium": 5.0,
-            "low": 2.5,
-            "info": 1.0
-        }
-        
-        weighted_score = sum(
-            severity_counts[severity] * weight
-            for severity, weight in weights.items()
-        )
-        
-        # Normalize to 0-100 scale
-        max_possible_score = total_alerts * weights["critical"]
-        risk_score = (weighted_score / max_possible_score) * 100 if max_possible_score > 0 else 0
-        
-        return round(risk_score, 2)
+        return summary
     
     def _get_risk_level(self, risk_score: float) -> str:
-        """Convert risk score to risk level"""
+        """Convert numeric risk score to risk level"""
         if risk_score >= 80:
             return "Critical"
         elif risk_score >= 60:
@@ -182,133 +270,32 @@ class ReportGenerator:
         else:
             return "Minimal"
     
-    def _calculate_trend(self, events: List[SecurityEvent]) -> str:
-        """Calculate trend compared to previous period"""
-        if not events:
-            return "stable"
+    def _assess_breach_risk(self, breach_indicators: List[Dict]) -> str:
+        """Assess overall breach risk based on indicators"""
+        if not breach_indicators:
+            return "Low - No significant breach indicators detected"
         
-        # Split events into two halves of the week
-        mid_point = datetime.utcnow() - timedelta(days=3.5)
+        high_risk_count = sum(1 for bi in breach_indicators if bi.get('risk_level') == 'high')
+        medium_risk_count = sum(1 for bi in breach_indicators if bi.get('risk_level') == 'medium')
         
-        recent_events = [e for e in events if e.timestamp > mid_point]
-        older_events = [e for e in events if e.timestamp <= mid_point]
-        
-        recent_count = len(recent_events)
-        older_count = len(older_events)
-        
-        if older_count == 0:
-            return "increasing" if recent_count > 0 else "stable"
-        
-        change_ratio = recent_count / older_count
-        
-        if change_ratio > 1.2:
-            return "increasing"
-        elif change_ratio < 0.8:
-            return "decreasing"
+        if high_risk_count >= 2:
+            return "High - Multiple high-risk indicators detected, immediate investigation recommended"
+        elif high_risk_count >= 1:
+            return "Medium-High - High-risk indicators present, investigation recommended"
+        elif medium_risk_count >= 3:
+            return "Medium - Multiple concerning patterns detected"
+        elif medium_risk_count >= 1:
+            return "Low-Medium - Some concerning patterns, monitoring recommended"
         else:
-            return "stable"
+            return "Low - Minor indicators present"
     
-    def _analyze_breaches(self, events: List[SecurityEvent]) -> Dict[str, Any]:
-        """Analyze potential security breaches"""
-        breach_indicators = []
-        suspicious_patterns = []
-        
-        # Group events by source
-        source_events = {}
-        for event in events:
-            source = event.source_ip or event.source_host or "unknown"
-            if source not in source_events:
-                source_events[source] = []
-            source_events[source].append(event)
-        
-        # Analyze patterns
-        for source, source_event_list in source_events.items():
-            if len(source_event_list) > 10:  # High frequency from single source
-                critical_events = [e for e in source_event_list if e.severity and e.severity.lower() == "critical"]
-                
-                if critical_events:
-                    breach_indicators.append({
-                        "source": source,
-                        "type": "potential_breach",
-                        "description": f"Multiple critical events from {source}",
-                        "event_count": len(source_event_list),
-                        "critical_count": len(critical_events),
-                        "first_seen": min(e.timestamp for e in source_event_list).isoformat(),
-                        "last_seen": max(e.timestamp for e in source_event_list).isoformat()
-                    })
-                
-                if len(source_event_list) > 50:
-                    suspicious_patterns.append({
-                        "source": source,
-                        "type": "high_frequency_activity",
-                        "description": f"Unusually high activity from {source}",
-                        "event_count": len(source_event_list)
-                    })
-        
-        # Look for authentication failures
-        auth_failures = [e for e in events if e.event_type and "auth" in e.event_type.lower()]
-        if len(auth_failures) > 20:
-            breach_indicators.append({
-                "type": "authentication_anomaly",
-                "description": "High number of authentication-related events",
-                "event_count": len(auth_failures)
-            })
-        
-        return {
-            "breach_indicators": breach_indicators,
-            "suspicious_patterns": suspicious_patterns,
-            "total_indicators": len(breach_indicators),
-            "breach_risk_level": "High" if len(breach_indicators) > 2 else "Medium" if len(breach_indicators) > 0 else "Low"
-        }
-    
-    def _generate_recommendations(self, stats: SecurityStats, breach_analysis: Dict[str, Any]) -> List[str]:
-        """Generate security recommendations based on analysis"""
-        recommendations = []
-        
-        if stats.critical_count > 0:
-            recommendations.append("Immediate attention required: Address all critical security alerts")
-        
-        if stats.risk_score > 70:
-            recommendations.append("Implement additional security monitoring and response procedures")
-        
-        if breach_analysis["total_indicators"] > 0:
-            recommendations.append("Investigate potential security breach indicators immediately")
-        
-        if stats.total_alerts > 100:
-            recommendations.append("Consider implementing alert filtering to reduce noise")
-        
-        # Source-based recommendations
-        top_source_count = stats.top_sources[0]["count"] if stats.top_sources else 0
-        if top_source_count > 20:
-            recommendations.append(f"Investigate high-activity source: {stats.top_sources[0]['source']}")
-        
-        if not recommendations:
-            recommendations.append("Continue monitoring current security posture")
-        
-        return recommendations
-    
-    def format_as_json(self, report: Dict[str, Any]) -> str:
+    def format_as_json(self, report: Dict) -> str:
         """Format report as JSON string"""
         return json.dumps(report, indent=2, default=str)
     
-    def format_as_html(self, report: Dict[str, Any]) -> str:
-        """Format report as HTML for email"""
-        summary = report["summary"]
-        stats = report["statistics"]
-        breach_analysis = report["breach_analysis"]
-        
-        # Risk level color mapping
-        risk_colors = {
-            "Critical": "#dc3545",
-            "High": "#fd7e14",
-            "Medium": "#ffc107",
-            "Low": "#28a745",
-            "Minimal": "#6c757d"
-        }
-        
-        risk_color = risk_colors.get(summary["risk_level"], "#6c757d")
-        
-        html_template = f"""
+    def format_as_html(self, report: Dict) -> str:
+        """Format report as email-ready HTML"""
+        html = f"""
 <!DOCTYPE html>
 <html>
 <head>
@@ -316,63 +303,57 @@ class ReportGenerator:
     <title>Weekly Security Report</title>
     <style>
         body {{ font-family: Arial, sans-serif; margin: 20px; color: #333; }}
-        .header {{ background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; }}
-        .summary {{ background-color: #fff; border: 1px solid #dee2e6; padding: 20px; border-radius: 5px; margin-bottom: 20px; }}
-        .risk-score {{ font-size: 2em; font-weight: bold; color: {risk_color}; }}
-        .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }}
-        .stat-card {{ background-color: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 4px solid #007bff; }}
-        .stat-number {{ font-size: 1.5em; font-weight: bold; color: #007bff; }}
-        .breach-alert {{ background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 10px 0; }}
-        .critical {{ color: #dc3545; font-weight: bold; }}
-        .high {{ color: #fd7e14; font-weight: bold; }}
-        .medium {{ color: #ffc107; font-weight: bold; }}
-        .recommendations {{ background-color: #d1ecf1; border: 1px solid #bee5eb; padding: 15px; border-radius: 5px; }}
-        table {{ width: 100%; border-collapse: collapse; margin: 10px 0; }}
-        th, td {{ padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }}
-        th {{ background-color: #f8f9fa; }}
+        .header {{ background-color: #1e3a8a; color: white; padding: 20px; text-align: center; }}
+        .summary {{ background-color: #f8f9fa; padding: 15px; margin: 20px 0; border-radius: 5px; }}
+        .stats {{ display: flex; justify-content: space-around; margin: 20px 0; }}
+        .stat-box {{ background-color: #e3f2fd; padding: 15px; border-radius: 5px; text-align: center; min-width: 150px; }}
+        .risk-score {{ font-size: 24px; font-weight: bold; }}
+        .critical {{ color: #d32f2f; }}
+        .high {{ color: #f57400; }}
+        .medium {{ color: #fbc02d; }}
+        .low {{ color: #388e3c; }}
+        .minimal {{ color: #4caf50; }}
+        .table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+        .table th, .table td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+        .table th {{ background-color: #f2f2f2; }}
+        .section {{ margin: 30px 0; }}
+        .section h2 {{ color: #1e3a8a; border-bottom: 2px solid #1e3a8a; padding-bottom: 5px; }}
+        .alert-item {{ background-color: #fff3cd; padding: 10px; margin: 5px 0; border-radius: 3px; border-left: 4px solid #ffc107; }}
+        .breach-indicator {{ background-color: #f8d7da; padding: 10px; margin: 5px 0; border-radius: 3px; border-left: 4px solid #dc3545; }}
     </style>
 </head>
 <body>
     <div class="header">
         <h1>Weekly Security Report</h1>
-        <p><strong>Period:</strong> {report['period']['start_date'][:10]} to {report['period']['end_date'][:10]}</p>
-        <p><strong>Generated:</strong> {report['generated_at'][:19]} UTC</p>
+        <p>{report['period']['start_date'][:10]} to {report['period']['end_date'][:10]}</p>
     </div>
     
     <div class="summary">
         <h2>Executive Summary</h2>
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-number">{summary['total_alerts']}</div>
-                <div>Total Alerts</div>
-            </div>
-            <div class="stat-card">
-                <div class="risk-score">{summary['risk_score']}</div>
-                <div>Risk Score ({summary['risk_level']})</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number critical">{summary['critical_alerts']}</div>
-                <div>Critical Alerts</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">{summary['trend'].title()}</div>
-                <div>Trend</div>
-            </div>
+        <pre>{report['summary']}</pre>
+    </div>
+    
+    <div class="stats">
+        <div class="stat-box">
+            <h3>Total Alerts</h3>
+            <div class="risk-score">{report['statistics']['total_alerts']}</div>
+        </div>
+        <div class="stat-box">
+            <h3>Risk Score</h3>
+            <div class="risk-score {self._get_risk_level(report['statistics']['risk_score']).lower()}">{report['statistics']['risk_score']}/100</div>
+        </div>
+        <div class="stat-box">
+            <h3>High Priority</h3>
+            <div class="risk-score">{len(report['high_priority_events'])}</div>
+        </div>
+        <div class="stat-box">
+            <h3>Breach Indicators</h3>
+            <div class="risk-score">{report['breach_analysis']['indicators_found']}</div>
         </div>
     </div>
     
-    <div class="summary">
+    <div class="section">
         <h2>Severity Breakdown</h2>
-        <table>
-            <tr>
-                <th>Severity</th>
-                <th>Count</th>
-                <th>Percentage</th>
-            </tr>
-"""
-        
-        total = summary['total_alerts'] or 1
-        for severity, count in stats['severity_breakdown'].items():
-            percentage = (count / total) * 100
-            severity_class = severity if severity in ['critical', 'high', 'medium'] else ''
-            html_template += f
+        <table class="table">
+            <thead>
+                <tr>
