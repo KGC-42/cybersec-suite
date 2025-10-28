@@ -1,47 +1,50 @@
 from datetime import datetime, timedelta
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from models.database import SecurityEvent
+from typing import Dict, Any
+from sqlalchemy.orm import Session
+from sqlalchemy import and_
+
+from app.models.database import SecurityEvent
 
 
 class ReportGenerator:
-    def __init__(self, db_session):
-        self.db_session = db_session
-    
-    def generate_weekly_report(self, user_id):
-        end_date = datetime.now()
+    def __init__(self, db_session: Session):
+        self.db = db_session
+
+    def generate_weekly_report(self, user_id: int) -> Dict[str, Any]:
+        """Generate a weekly security report for the specified user."""
+        end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=7)
         
-        events = self.db_session.query(SecurityEvent).filter(
-            SecurityEvent.user_id == user_id,
-            SecurityEvent.timestamp >= start_date,
-            SecurityEvent.timestamp <= end_date
+        # Query events from last 7 days
+        events = self.db.query(SecurityEvent).filter(
+            and_(
+                SecurityEvent.user_id == user_id,
+                SecurityEvent.timestamp >= start_date,
+                SecurityEvent.timestamp <= end_date
+            )
         ).all()
         
         total_events = len(events)
         severity_counts = {}
         event_type_counts = {}
         
+        # Count severities and event types
         for event in events:
-            severity = event.severity
-            event_type = event.event_type
+            # Count severity levels
+            severity = event.severity.lower() if event.severity else 'unknown'
+            severity_counts[severity] = severity_counts.get(severity, 0) + 1
             
-            if severity in severity_counts:
-                severity_counts[severity] += 1
-            else:
-                severity_counts[severity] = 1
-            
-            if event_type in event_type_counts:
-                event_type_counts[event_type] += 1
-            else:
-                event_type_counts[event_type] = 1
+            # Count event types
+            event_type = event.event_type if event.event_type else 'unknown'
+            event_type_counts[event_type] = event_type_counts.get(event_type, 0) + 1
         
+        # Calculate risk score
         risk_score = self._calculate_risk_score(severity_counts)
         
+        # Date range
         date_range = {
-            'start_date': start_date.strftime('%Y-%m-%d'),
-            'end_date': end_date.strftime('%Y-%m-%d')
+            'start': start_date.isoformat(),
+            'end': end_date.isoformat()
         }
         
         return {
@@ -52,14 +55,15 @@ class ReportGenerator:
             'date_range': date_range
         }
     
-    def _calculate_risk_score(self, severity_counts):
-        if 'critical' in severity_counts:
+    def _calculate_risk_score(self, severity_counts: Dict[str, int]) -> int:
+        """Calculate risk score based on severity counts."""
+        if severity_counts.get('critical', 0) > 0:
             return 100
-        elif 'high' in severity_counts:
+        elif severity_counts.get('high', 0) > 0:
             return 75
-        elif 'medium' in severity_counts:
+        elif severity_counts.get('medium', 0) > 0:
             return 50
-        elif 'low' in severity_counts:
+        elif severity_counts.get('low', 0) > 0:
             return 25
         else:
             return 0
