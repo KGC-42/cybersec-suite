@@ -1,45 +1,47 @@
 from datetime import datetime, timedelta
-from app.models.database import SecurityEvent
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from models.database import SecurityEvent
+
 
 class ReportGenerator:
     def __init__(self, db_session):
         self.db_session = db_session
     
     def generate_weekly_report(self, user_id):
-        # Calculate date range for last 7 days
-        end_date = datetime.utcnow()
+        end_date = datetime.now()
         start_date = end_date - timedelta(days=7)
         
-        # Query SecurityEvent from last 7 days
         events = self.db_session.query(SecurityEvent).filter(
             SecurityEvent.user_id == user_id,
             SecurityEvent.timestamp >= start_date,
             SecurityEvent.timestamp <= end_date
         ).all()
         
-        # Calculate total events
         total_events = len(events)
-        
-        # Count severities and event types
         severity_counts = {}
         event_type_counts = {}
         
         for event in events:
-            # Count severities
             severity = event.severity
-            severity_counts[severity] = severity_counts.get(severity, 0) + 1
-            
-            # Count event types
             event_type = event.event_type
-            event_type_counts[event_type] = event_type_counts.get(event_type, 0) + 1
+            
+            if severity in severity_counts:
+                severity_counts[severity] += 1
+            else:
+                severity_counts[severity] = 1
+            
+            if event_type in event_type_counts:
+                event_type_counts[event_type] += 1
+            else:
+                event_type_counts[event_type] = 1
         
-        # Calculate risk score
         risk_score = self._calculate_risk_score(severity_counts)
         
-        # Create date range dict
         date_range = {
-            'start_date': start_date.isoformat(),
-            'end_date': end_date.isoformat()
+            'start_date': start_date.strftime('%Y-%m-%d'),
+            'end_date': end_date.strftime('%Y-%m-%d')
         }
         
         return {
@@ -51,13 +53,13 @@ class ReportGenerator:
         }
     
     def _calculate_risk_score(self, severity_counts):
-        if severity_counts.get('critical', 0) > 0:
+        if 'critical' in severity_counts:
             return 100
-        elif severity_counts.get('high', 0) > 0:
+        elif 'high' in severity_counts:
             return 75
-        elif severity_counts.get('medium', 0) > 0:
+        elif 'medium' in severity_counts:
             return 50
-        elif severity_counts.get('low', 0) > 0:
+        elif 'low' in severity_counts:
             return 25
         else:
             return 0
