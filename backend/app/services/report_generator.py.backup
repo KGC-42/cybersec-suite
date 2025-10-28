@@ -1,35 +1,35 @@
 from datetime import datetime, timedelta
+from typing import Dict, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from app.models.database import SecurityEvent
+from ..models.database import SecurityEvent
 
 
 class ReportGenerator:
     def __init__(self, db_session: Session):
-        self.db = db_session
+        self.db_session = db_session
     
-    def generate_weekly_report(self, user_id: int) -> dict:
-        """Generate a weekly security report for a user"""
+    def generate_weekly_report(self, user_id: int) -> Dict[str, Any]:
+        # Calculate date range for last 7 days
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=7)
         
-        # Query events from last 7 days for the user
-        events_query = self.db.query(SecurityEvent).filter(
+        # Query security events from last 7 days
+        events = self.db_session.query(SecurityEvent).filter(
             SecurityEvent.user_id == user_id,
             SecurityEvent.timestamp >= start_date,
             SecurityEvent.timestamp <= end_date
-        )
+        ).all()
         
-        events = events_query.all()
+        # Calculate total events
         total_events = len(events)
         
-        # Count severity levels
+        # Calculate severity counts
         severity_counts = {}
         for event in events:
             severity = event.severity
             severity_counts[severity] = severity_counts.get(severity, 0) + 1
         
-        # Count event types
+        # Calculate event type counts
         event_type_counts = {}
         for event in events:
             event_type = event.event_type
@@ -38,7 +38,7 @@ class ReportGenerator:
         # Calculate risk score
         risk_score = self._calculate_risk_score(severity_counts)
         
-        # Create date range dict
+        # Prepare date range
         date_range = {
             'start_date': start_date.isoformat(),
             'end_date': end_date.isoformat()
@@ -52,8 +52,7 @@ class ReportGenerator:
             'date_range': date_range
         }
     
-    def _calculate_risk_score(self, severity_counts: dict) -> int:
-        """Calculate risk score based on severity levels"""
+    def _calculate_risk_score(self, severity_counts: Dict[str, int]) -> int:
         if severity_counts.get('critical', 0) > 0:
             return 100
         elif severity_counts.get('high', 0) > 0:
