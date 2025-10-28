@@ -1,71 +1,129 @@
+"""Security Report Generator Service"""
 from datetime import datetime, timedelta
 from typing import Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-
-try:
-    from app.models.database import SecurityEvent
-except ImportError:
-    from models.database import SecurityEvent
+from app.models.security import SecurityEvent, EventSeverity, EventSource
 
 
 class ReportGenerator:
-    def __init__(self, db_session: Session):
-        self.db = db_session
-
-    def generate_weekly_report(self, user_id: int) -> Dict[str, Any]:
-        # Calculate date range for last 7 days
+    """Generate security reports from events"""
+    
+    def __init__(self, db: Session):
+        self.db = db
+    
+    def generate_weekly_report(self, user_id: int = None) -> Dict[str, Any]:
+        """
+        Generate weekly security report
+        
+        Args:
+            user_id: Optional user/org filter
+            
+        Returns:
+            Dict with report data
+        """
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=7)
         
-        # Query events from last 7 days for the user
-        events = self.db.query(SecurityEvent).filter(
-            SecurityEvent.user_id == user_id,
+        # Query events
+        query = self.db.query(SecurityEvent).filter(
             SecurityEvent.timestamp >= start_date,
             SecurityEvent.timestamp <= end_date
-        ).all()
+        )
         
-        # Calculate total events
-        total_events = len(events)
+        if user_id:
+            query = query.filter(SecurityEvent.organization_id == user_id)
+        
+        events = query.all()
         
         # Calculate severity counts
-        severity_counts = {}
-        for event in events:
-            severity = event.severity
-            severity_counts[severity] = severity_counts.get(severity, 0) + 1
-        
-        # Calculate event type counts
-        event_type_counts = {}
-        for event in events:
-            event_type = event.event_type
-            event_type_counts[event_type] = event_type_counts.get(event_type, 0) + 1
-        
-        # Calculate risk score based on severity
-        risk_score = self._calculate_risk_score(severity_counts)
-        
-        # Prepare date range
-        date_range = {
-            'start_date': start_date.isoformat(),
-            'end_date': end_date.isoformat()
+        severity_counts = {
+            'critical': 0,
+            'high': 0,
+            'medium': 0,
+            'low': 0,
+            'info': 0
         }
         
+        for event in events:
+            if event.severity:
+                severity_counts[event.severity.value] += 1
+        
+        # Calculate source counts
+        source_counts = {
+            'clamav': 0,
+            'phishing': 0,
+            'darkweb': 0,
+            'suricata': 0,
+            'agent': 0
+        }
+        
+        for event in events:
+            if event.source:
+                source_counts[event.source.value] += 1
+        
+        # Calculate risk score
+        risk_score = self._calculate_risk_score(severity_counts)
+        
+        # Get top events
+        top_events = sorted(
+            events,
+            key=lambda e: self._severity_value(e.severity),
+            reverse=True
+        )[:10]
+        
         return {
-            'total_events': total_events,
+            'report_id': f'weekly_{datetime.utcnow().strftime("%Y%m%d")}',
+            'date_range': {
+                'start': start_date.isoformat(),
+                'end': end_date.isoformat()
+            },
+            'total_events': len(events),
             'severity_counts': severity_counts,
-            'event_type_counts': event_type_counts,
+            'source_counts': source_counts,
             'risk_score': risk_score,
-            'date_range': date_range
+            'risk_level': self._get_risk_level(risk_score),
+            'top_events': [
+                {
+                    'id': e.id,
+                    'title': e.title,
+                    'severity': e.severity.value if e.severity else 'info',
+                    'source': e.source.value if e.source else 'agent',
+                    'timestamp': e.timestamp.isoformat()
+                }
+                for e in top_events
+            ]
         }
     
     def _calculate_risk_score(self, severity_counts: Dict[str, int]) -> int:
-        """Calculate risk score based on severity counts"""
-        if severity_counts.get('critical', 0) > 0:
+        """Calculate risk score 0-100"""
+        if severity_counts['critical'] > 0:
             return 100
-        elif severity_counts.get('high', 0) > 0:
+        elif severity_counts['high'] > 0:
             return 75
-        elif severity_counts.get('medium', 0) > 0:
+        elif severity_counts['medium'] > 0:
             return 50
-        elif severity_counts.get('low', 0) > 0:
+        elif severity_counts['low'] > 0:
             return 25
-        else:
-            return 0
+        return 0
+    
+    def _get_risk_level(self, score: int) -> str:
+        """Get risk level label"""
+        if score >= 75:
+            return 'Critical'
+        elif score >= 50:
+            return 'High'
+        elif score >= 25:
+            return 'Medium'
+        return 'Low'
+    
+    def _severity_value(self, severity) -> int:
+        """Convert severity to numeric value for sorting"""
+        values = {
+            EventSeverity.CRITICAL: 5,
+            EventSeverity.HIGH: 4,
+            EventSeverity.MEDIUM: 3,
+            EventSeverity.LOW: 2,
+            EventSeverity.INFO: 1
+        }
+        return values.get(severity, 0)
