@@ -11,6 +11,10 @@ from pathlib import Path
 from datetime import datetime
 import getpass
 import sys
+import warnings
+
+# Suppress the pkg_resources warning
+warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
 
 from config import Config
 from scanner import MalwareScanner

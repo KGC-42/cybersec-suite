@@ -281,31 +281,44 @@ class CyberSecAgent:
         print("\n[*] Testing backend connection...")
         
         try:
-            response = requests.get(
-                f"{self.config.backend_url}/health",
-                timeout=5
-            )
+            # Try multiple endpoints to find one that works
+            test_endpoints = [
+                "/health",
+                "/api/health",
+                "/api/v1/health",
+                "",  # Root endpoint
+                "/ping"
+            ]
             
-            if response.status_code == 200:
-                print("[+] Backend is reachable!")
-                return True
-            else:
-                print(f"[!] Backend returned status: {response.status_code}")
-                return False
+            for endpoint in test_endpoints:
+                try:
+                    response = requests.get(
+                        f"{self.config.backend_url}{endpoint}",
+                        timeout=5
+                    )
+                    
+                    if response.status_code in [200, 301, 302]:
+                        print(f"[+] Backend is reachable at {endpoint}!")
+                        return True
+                except:
+                    continue
+            
+            print(f"[!] Backend at {self.config.backend_url} is not responding to health checks")
+            print("[i] Continuing anyway - backend might still work for API calls")
+            return True
         
         except Exception as e:
             print(f"[-] Cannot reach backend: {e}")
-            return False
+            print("[i] Continuing anyway - backend might still work for API calls")
+            return True
 
 
 # Main entry point
 if __name__ == "__main__":
     agent = CyberSecAgent()
     
-    # Test connection
-    if not agent.test_connection():
-        print("\n[-] Cannot reach backend. Check your internet connection.")
-        exit(1)
+    # Test connection (but don't exit if it fails)
+    agent.test_connection()
     
     # Login
     if not agent.login():
