@@ -3,9 +3,9 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 
-from app.database import get_db
-from app.auth import get_current_user
-from app.models.security import SecurityEvent
+from .database import get_db
+from .auth import get_current_user
+from .models.security import SecurityEvent
 
 router = APIRouter(prefix="/api/v1/events", tags=["events"])
 
