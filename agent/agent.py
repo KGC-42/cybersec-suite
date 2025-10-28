@@ -1,5 +1,5 @@
 """
-CyberSec Suite Agent - Full Version with Background Loops
+CyberSec Suite Agent - Full Version with Phishing & Breach Monitoring
 """
 
 import socket
@@ -8,10 +8,12 @@ import requests
 import threading
 import time
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 import getpass
 import sys
 import warnings
+import re
+from bs4 import BeautifulSoup
 
 # Suppress the pkg_resources warning
 warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
@@ -32,8 +34,10 @@ class CyberSecAgent:
         self.config = Config()
         self.agent_id = None
         self.access_token = None
+        self.user_email = None
         self.is_running = False
         self.scanner = MalwareScanner(self)
+        self.last_breach_check = datetime.now() - timedelta(days=1)
         
         # Try to load existing agent ID
         self._load_agent_id()
@@ -87,6 +91,117 @@ class CyberSecAgent:
         else:
             return {"Content-Type": "application/json"}
     
+    def report_event(self, source: str, severity: str, title: str, description: str, details: dict = None):
+        """Report a security event to the backend."""
+        if not self.agent_id:
+            return False
+        
+        try:
+            payload = {
+                "agent_id": self.agent_id,
+                "source": source,
+                "severity": severity,
+                "title": title,
+                "description": description,
+                "details": details or {},
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            response = requests.post(
+                f"{self.config.backend_url}/api/v1/events/ingest",
+                json=payload,
+                headers=self._get_auth_headers(),
+                timeout=10
+            )
+            
+            if response.status_code in [200, 201]:
+                print(f"[✓] Reported {severity.upper()} event: {title}")
+                return True
+            else:
+                print(f"[!] Failed to report event: {response.status_code}")
+                return False
+        
+        except Exception as e:
+            print(f"[!] Error reporting event: {e}")
+            return False
+    
+    def check_phishing_urls(self):
+        """Scan Downloads folder for HTML files and check URLs for phishing"""
+        try:
+            downloads_path = Path.home() / "Downloads"
+            html_files = list(downloads_path.glob("*.html"))[:10]  # Check last 10 HTML files
+            
+            if not html_files:
+                return
+            
+            print(f"[*] Checking {len(html_files)} HTML files for phishing URLs...")
+            
+            for html_file in html_files:
+                try:
+                    with open(html_file, 'r', encoding='utf-8', errors='ignore') as f:
+                        soup = BeautifulSoup(f.read(), 'html.parser')
+                        urls = [a.get('href') for a in soup.find_all('a', href=True)]
+                        
+                        for url in urls[:5]:  # Check first 5 URLs per file
+                            if url.startswith('http'):
+                                response = requests.post(
+                                    f"{self.config.backend_url}/api/v1/phishing/check",
+                                    headers=self._get_auth_headers(),
+                                    json={"url": url},
+                                    timeout=10
+                                )
+                                
+                                if response.status_code == 200:
+                                    data = response.json()
+                                    if data.get("is_threat"):
+                                        self.report_event(
+                                            "phishing", 
+                                            "high",
+                                            f"Phishing URL detected",
+                                            f"Malicious URL found in {html_file.name}: {url}",
+                                            data
+                                        )
+                                time.sleep(0.5)  # Rate limit
+                
+                except Exception as e:
+                    print(f"[!] Error checking {html_file.name}: {e}")
+        
+        except Exception as e:
+            print(f"[!] Phishing check error: {e}")
+    
+    def check_breach_status(self):
+        """Check if user email has been in any data breaches"""
+        if not self.user_email:
+            return
+        
+        try:
+            print(f"[*] Checking {self.user_email} for data breaches...")
+            
+            response = requests.post(
+                f"{self.config.backend_url}/api/v1/breach/check",
+                headers=self._get_auth_headers(),
+                json={"email": self.user_email},
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("breaches"):
+                    breach_count = len(data["breaches"])
+                    self.report_event(
+                        "darkweb",
+                        "critical",
+                        f"Email found in {breach_count} data breaches",
+                        f"Email {self.user_email} has been compromised in {breach_count} breaches",
+                        data
+                    )
+                    print(f"[!] WARNING: {breach_count} breaches found!")
+                else:
+                    print(f"[✓] No breaches found for {self.user_email}")
+        
+        except Exception as e:
+            print(f"[!] Breach check error: {e}")
+    
     def login(self, email: str = None, password: str = None):
         """Login to get access token."""
         print("\n[*] Authenticating with backend...")
@@ -96,6 +211,8 @@ class CyberSecAgent:
             email = input("Email: ")
         if not password:
             password = getpass.getpass("Password: ")
+        
+        self.user_email = email  # Save for breach checking
         
         try:
             response = requests.post(
@@ -206,12 +323,25 @@ class CyberSecAgent:
         except Exception:
             return False
     
-    def heartbeat_loop(self):
-        """Background thread: Send heartbeat every 60 seconds."""
-        print(f"<3 Heartbeat loop started (every {self.config.heartbeat_interval}s)")
+    def background_tasks(self):
+        """Background thread: Heartbeat, phishing checks, breach monitoring."""
+        print(f"[*] Background tasks started")
+        print(f"   • Heartbeat: Every {self.config.heartbeat_interval}s")
+        print(f"   • Phishing checks: Every scan cycle")
+        print(f"   • Breach monitoring: Daily")
         
         while self.is_running:
+            # Heartbeat
             self.send_heartbeat()
+            
+            # Check for phishing URLs
+            self.check_phishing_urls()
+            
+            # Check breaches once per day
+            if (datetime.now() - self.last_breach_check).days >= 1:
+                self.check_breach_status()
+                self.last_breach_check = datetime.now()
+            
             time.sleep(self.config.heartbeat_interval)
     
     def scan_loop(self):
@@ -234,7 +364,7 @@ class CyberSecAgent:
     def start(self):
         """Start the agent with background loops."""
         print("\n" + "="*60)
-        print("[*] CyberSec Suite Agent v1.0")
+        print("[*] CyberSec Suite Agent v1.1 - With Phishing & Breach Detection")
         print("="*60 + "\n")
         
         # Step 1: Register
@@ -251,19 +381,23 @@ class CyberSecAgent:
             print("   • Windows: https://www.clamav.net/downloads")
             print("\n[!] Agent will run without scanning until ClamAV is installed.")
         
-        # Step 3: Start background threads
+        # Step 3: Initial breach check
+        self.check_breach_status()
+        
+        # Step 4: Start background threads
         self.is_running = True
         
-        heartbeat_thread = threading.Thread(target=self.heartbeat_loop, daemon=True)
+        background_thread = threading.Thread(target=self.background_tasks, daemon=True)
         scan_thread = threading.Thread(target=self.scan_loop, daemon=True)
         
-        heartbeat_thread.start()
+        background_thread.start()
         scan_thread.start()
         
         print("\n[+] Agent started successfully!")
         print(f"   Agent ID: {self.agent_id}")
-        print(f"   Heartbeat: Every {self.config.heartbeat_interval}s")
-        print(f"   Scanning: Every {self.config.scan_interval}s")
+        print(f"   Monitoring: {self.user_email}")
+        print(f"   Background tasks: Every {self.config.heartbeat_interval}s")
+        print(f"   Malware scanning: Every {self.config.scan_interval}s")
         print("\nPress Ctrl+C to stop the agent.\n")
         
         # Keep main thread alive
@@ -281,14 +415,7 @@ class CyberSecAgent:
         print("\n[*] Testing backend connection...")
         
         try:
-            # Try multiple endpoints to find one that works
-            test_endpoints = [
-                "/health",
-                "/api/health",
-                "/api/v1/health",
-                "",  # Root endpoint
-                "/ping"
-            ]
+            test_endpoints = ["/health", "/api/health", "/api/v1/health", "", "/ping"]
             
             for endpoint in test_endpoints:
                 try:
@@ -303,13 +430,12 @@ class CyberSecAgent:
                 except:
                     continue
             
-            print(f"[!] Backend at {self.config.backend_url} is not responding to health checks")
+            print(f"[!] Backend at {self.config.backend_url} is not responding")
             print("[i] Continuing anyway - backend might still work for API calls")
             return True
         
         except Exception as e:
             print(f"[-] Cannot reach backend: {e}")
-            print("[i] Continuing anyway - backend might still work for API calls")
             return True
 
 
@@ -317,7 +443,7 @@ class CyberSecAgent:
 if __name__ == "__main__":
     agent = CyberSecAgent()
     
-    # Test connection (but don't exit if it fails)
+    # Test connection
     agent.test_connection()
     
     # Login
