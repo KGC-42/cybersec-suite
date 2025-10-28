@@ -255,6 +255,27 @@ class ReportGenerator:
         
         return recommendations
     
+    def _get_risk_level(self, risk_score: int) -> str:
+        """Get risk level text based on risk score"""
+        if risk_score >= 80:
+            return "CRITICAL"
+        elif risk_score >= 60:
+            return "HIGH"
+        elif risk_score >= 40:
+            return "MODERATE"
+        else:
+            return "LOW"
+    
+    def _get_risk_color(self, risk_level: str) -> str:
+        """Get color code for risk level"""
+        color_map = {
+            "CRITICAL": "#dc3545",
+            "HIGH": "#fd7e14",
+            "MODERATE": "#ffc107",
+            "LOW": "#28a745"
+        }
+        return color_map.get(risk_level, "#6c757d")
+    
     def format_as_json(self, report: Dict[str, Any]) -> str:
         """Format report as JSON string"""
         return json.dumps(report, indent=2, default=str)
@@ -265,7 +286,33 @@ class ReportGenerator:
         risk_level = self._get_risk_level(risk_score)
         risk_color = self._get_risk_color(risk_level)
         
-        html = f"""<!DOCTYPE html>
+        # Build severity bar percentages
+        total_alerts = report['statistics']['total_alerts']
+        if total_alerts > 0:
+            severity_dist = report['statistics']['severity_distribution']
+            critical_pct = (severity_dist['critical'] / total_alerts) * 100
+            high_pct = (severity_dist['high'] / total_alerts) * 100
+            medium_pct = (severity_dist['medium'] / total_alerts) * 100
+            low_pct = (severity_dist['low'] / total_alerts) * 100
+        else:
+            critical_pct = high_pct = medium_pct = low_pct = 0
+        
+        # Build top threats HTML
+        top_threats_html = ""
+        for threat in report['summary']['top_threats'][:3]:
+            top_threats_html += f"""
+            <tr>
+                <td>{threat['type']}</td>
+                <td>{threat['count']}</td>
+                <td>{threat.get('threat_score', 0):.1f}</td>
+            </tr>"""
+        
+        # Build recommendations HTML
+        recommendations_html = ""
+        for rec in report['recommendations']:
+            recommendations_html += f"<li>{rec}</li>"
+        
+        html = f'''<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
@@ -289,34 +336,4 @@ class ReportGenerator:
         .severity-low {{ background-color: #28a745; }}
         .recommendations {{ background-color: #fff3cd; padding: 20px; border-radius: 8px; border-left: 4px solid #ffc107; }}
         .recommendations ul {{ margin: 0; padding-left: 20px; }}
-        .breach-alert {{ background-color: #f8d7da; padding: 15px; border-radius: 8px; border-left: 4px solid #dc3545; margin: 10px 0; }}
-        .table {{ width: 100%; border-collapse: collapse; margin: 15px 0; }}
-        .table th, .table td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
-        .table th {{ background-color: #f8f9fa; font-weight: bold; }}
-        .footer {{ text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; color: #666; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>Weekly Security Report</h1>
-            <p>Report Period: {report['period']['start_date'][:10]} to {report['period']['end_date'][:10]}</p>
-            <div class="risk-score">{risk_score}</div>
-            <div class="risk-level">{risk_level} RISK</div>
-        </div>
-
-        <div class="section">
-            <h2>Executive Summary</h2>
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-number">{report['statistics']['total_alerts']}</div>
-                    <div class="stat-label">Total Alerts</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">{report['statistics']['resolution_rate']}%</div>
-                    <div class="stat-label">Resolution Rate</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">{report['breach_analysis']['total_potential_breaches']}</div>
-                    <div class="stat-label">Potential Breaches</div>
-                </div>
+        .breach-alert {{ backgroun
