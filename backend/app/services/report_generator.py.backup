@@ -312,28 +312,28 @@ class ReportGenerator:
         for rec in report['recommendations']:
             recommendations_html += f"<li>{rec}</li>"
         
-        html_template = f"""<!DOCTYPE html>
+        html_template = """<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <title>Weekly Security Report</title>
     <style>
-        body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
-        .container {{ max-width: 800px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-        .header {{ text-align: center; margin-bottom: 30px; border-bottom: 2px solid #e0e0e0; padding-bottom: 20px; }}
-        .risk-score {{ font-size: 48px; font-weight: bold; color: {risk_color}; }}
-        .risk-level {{ font-size: 24px; color: {risk_color}; margin-top: 10px; }}
-        .section {{ margin-bottom: 30px; }}
-        .section h2 {{ color: #333; border-bottom: 1px solid #e0e0e0; padding-bottom: 10px; }}
-        .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }}
-        .stat-card {{ background-color: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; }}
-        .stat-number {{ font-size: 32px; font-weight: bold; color: #007bff; }}
-        .stat-label {{ color: #666; margin-top: 5px; }}
-        .severity-bar {{ display: flex; height: 30px; border-radius: 15px; overflow: hidden; margin: 10px 0; }}
-        .severity-critical {{ background-color: #dc3545; }}
-        .severity-high {{ background-color: #fd7e14; }}
-        .severity-medium {{ background-color: #ffc107; }}
-        .severity-low {{ background-color: #28a745; }}
-        .recommendations {{ background-color: #fff3cd; padding: 20px; border-radius: 8px; border-left: 4px solid #ffc107; }}
-        .recommendations ul {{ margin: 0; padding-left: 20px; }}
-        table {{ width:
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #e0e0e0; padding-bottom: 20px; }
+        .risk-score { font-size: 48px; font-weight: bold; color: """ + risk_color + """; }
+        .risk-level { font-size: 24px; color: """ + risk_color + """; margin-top: 10px; }
+        .section { margin-bottom: 30px; }
+        .section h2 { color: #333; border-bottom: 1px solid #e0e0e0; padding-bottom: 10px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }
+        .stat-card { background-color: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; }
+        .stat-number { font-size: 32px; font-weight: bold; color: #007bff; }
+        .stat-label { color: #666; margin-top: 5px; }
+        .severity-bar { display: flex; height: 30px; border-radius: 15px; overflow: hidden; margin: 10px 0; }
+        .severity-critical { background-color: #dc3545; }
+        .severity-high { background-color: #fd7e14; }
+        .severity-medium { background-color: #ffc107; }
+        .severity-low { background-color: #28a745; }
+        .recommendations { background-color: #fff3cd; padding: 20px; border-radius: 8px; border-left: 4px solid #ffc107; }
+        .recommendations ul { margin: 0; padding-left: 20px; }
+        table
