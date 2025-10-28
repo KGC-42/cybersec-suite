@@ -312,7 +312,7 @@ class ReportGenerator:
         for rec in report['recommendations']:
             recommendations_html += f"<li>{rec}</li>"
         
-        html = f'''<!DOCTYPE html>
+        html = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
