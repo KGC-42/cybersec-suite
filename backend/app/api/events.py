@@ -1,17 +1,13 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from database import get_db
-from auth import get_current_user
-from models.security import SecurityEvent
+from app.database import get_db
+from app.auth import get_current_user
+from app.models.security import SecurityEvent
+from app.services.report_generator import ReportGenerator
 
 router = APIRouter(prefix="/api/v1/events", tags=["events"])
-
 
 class EventCreate(BaseModel):
     agent_id: int
@@ -21,7 +17,6 @@ class EventCreate(BaseModel):
     description: Optional[str] = None
     details: Optional[dict] = None
 
-
 @router.post("/ingest")
 async def ingest_event(
     data: EventCreate,
@@ -30,7 +25,7 @@ async def ingest_event(
 ):
     event = SecurityEvent(
         agent_id=data.agent_id,
-        organization_id=current_user.get("organization_id", 1),
+        organization_id=1,  # Default org
         source=data.source,
         severity=data.severity,
         title=data.title,
@@ -39,22 +34,17 @@ async def ingest_event(
     )
     db.add(event)
     db.commit()
-    db.refresh(event)
     return {"id": event.id, "status": "created"}
-
 
 @router.get("/")
 async def list_events(
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    organization_id = current_user.get("organization_id", 1)
     events = db.query(SecurityEvent)\
-        .filter(SecurityEvent.organization_id == organization_id)\
         .order_by(SecurityEvent.timestamp.desc())\
         .limit(50)\
         .all()
-
     return [
         {
             "id": e.id,
@@ -67,3 +57,16 @@ async def list_events(
         }
         for e in events
     ]
+
+@router.get("/report/weekly")
+async def get_weekly_report(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate weekly security report"""
+    try:
+        generator = ReportGenerator(db)
+        report = generator.generate_weekly_report()
+        return report
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating report: {str(e)}")
