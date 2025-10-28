@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.routers import auth
+from app.api import agents, events, scanner, phishing, breach
 
 # Create FastAPI app
 app = FastAPI(
@@ -16,6 +18,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(auth.router)
+app.include_router(agents.router)
+app.include_router(events.router)
+app.include_router(scanner.router)
+app.include_router(phishing.router)
+app.include_router(breach.router)
 
 # Health check endpoint
 @app.get("/")
