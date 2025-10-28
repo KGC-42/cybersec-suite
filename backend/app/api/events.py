@@ -30,7 +30,7 @@ async def ingest_event(
 ):
     event = SecurityEvent(
         agent_id=data.agent_id,
-        organization_id=1,  # Default org
+        organization_id=current_user.get("organization_id", 1),
         source=data.source,
         severity=data.severity,
         title=data.title,
@@ -39,6 +39,7 @@ async def ingest_event(
     )
     db.add(event)
     db.commit()
+    db.refresh(event)
     return {"id": event.id, "status": "created"}
 
 
@@ -47,7 +48,9 @@ async def list_events(
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    organization_id = current_user.get("organization_id", 1)
     events = db.query(SecurityEvent)\
+        .filter(SecurityEvent.organization_id == organization_id)\
         .order_by(SecurityEvent.timestamp.desc())\
         .limit(50)\
         .all()
