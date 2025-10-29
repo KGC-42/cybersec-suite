@@ -6,9 +6,10 @@ import { Badge } from '@/components/ui/badge';
 
 interface Alert {
   id: number;
-  event_type: string;
+  source: string;
   severity: string;
-  created_at: string;
+  timestamp: string;
+  title: string;
   description: string;
 }
 
@@ -60,16 +61,16 @@ export default function AlertsPage() {
               <Card key={alert.id} className="bg-slate-800 border-slate-700 hover:border-violet-500 transition-colors">
                 <CardHeader>
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-white text-lg capitalize">{alert.event_type?.replace(/_/g, " ") || "Security Event"}</CardTitle>
+                    <CardTitle className="text-white text-lg capitalize">{alert.source?.replace(/_/g, " ") || "Security Event"}</CardTitle>
                     <Badge className={`${getSeverityColor(alert.severity)} text-white`}>
                       {alert.severity}
                     </Badge>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-slate-300 mb-2">{alert.description}</p>
+                  <p className="text-slate-300 mb-2">{alert.title}</p>
                   <p className="text-slate-500 text-sm">
-                    {new Date(alert.created_at).toLocaleString()}
+                    {new Date(alert.timestamp).toLocaleString()}
                   </p>
                 </CardContent>
               </Card>
