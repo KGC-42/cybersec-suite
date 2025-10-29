@@ -11,6 +11,7 @@ interface SecurityEvent {
   description: string;
   details: Record<string, unknown>;
   created_at: string;
+  source?: string;
 }
 
 interface ApiErrorResponse {
@@ -19,17 +20,20 @@ interface ApiErrorResponse {
 }
 
 type SeverityLevel = 'critical' | 'high' | 'medium' | 'low';
+type SourceType = 'all' | 'clamav' | 'phishing' | 'darkweb';
 
 export default function AlertsPage() {
   const [events, setEvents] = useState<SecurityEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [sourceFilter, setSourceFilter] = useState<SourceType>('all');
+  const [expandedEvents, setExpandedEvents] = useState<Set<number>>(new Set());
 
   const fetchEvents = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
-      
+
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Not authenticated');
@@ -52,10 +56,10 @@ export default function AlertsPage() {
       setEvents(eventData);
     } catch (err) {
       console.error('Error fetching events:', err);
-      
+
       if (axios.isAxiosError(err)) {
         const axiosError = err as AxiosError<ApiErrorResponse>;
-        
+
         if (axiosError.response?.status === 401) {
           setError('Authentication expired. Please log in again.');
           localStorage.removeItem('token');
@@ -67,9 +71,9 @@ export default function AlertsPage() {
           setError('Server error. Please try again later.');
         } else {
           setError(
-            axiosError.response?.data?.detail || 
-            axiosError.response?.data?.message || 
-            axiosError.message || 
+            axiosError.response?.data?.detail ||
+            axiosError.response?.data?.message ||
+            axiosError.message ||
             'Failed to load alerts'
           );
         }
@@ -88,9 +92,48 @@ export default function AlertsPage() {
     return () => clearInterval(interval);
   }, [fetchEvents]);
 
+  const getSourceFromEventType = useCallback((eventType: string): SourceType => {
+    if (!eventType) return 'clamav';
+    const type = eventType.toLowerCase();
+    if (type.includes('malware') || type.includes('virus')) return 'clamav';
+    if (type.includes('phishing')) return 'phishing';
+    if (type.includes('breach') || type.includes('darkweb') || type.includes('dark_web')) return 'darkweb';
+    return 'clamav';
+  }, []);
+
+  const getSourceColor = useCallback((source: SourceType): string => {
+    const colorMap: Record<SourceType, string> = {
+      clamav: 'bg-orange-100 text-orange-800 border-orange-300',
+      phishing: 'bg-red-100 text-red-800 border-red-300',
+      darkweb: 'bg-red-100 text-red-800 border-red-300',
+      all: 'bg-gray-100 text-gray-800 border-gray-300',
+    };
+    return colorMap[source] || colorMap.all;
+  }, []);
+
+  const getSourceIcon = useCallback((source: SourceType): string => {
+    const iconMap: Record<SourceType, string> = {
+      clamav: '🛡️',
+      phishing: '🎣',
+      darkweb: '🕷️',
+      all: '📋',
+    };
+    return iconMap[source] || iconMap.all;
+  }, []);
+
+  const getSourceLabel = useCallback((source: SourceType): string => {
+    const labelMap: Record<SourceType, string> = {
+      clamav: 'ClamAV',
+      phishing: 'Phishing',
+      darkweb: 'Dark Web',
+      all: 'All Sources',
+    };
+    return labelMap[source] || 'Unknown';
+  }, []);
+
   const getSeverityColor = useCallback((severity: string): string => {
     if (!severity) return 'bg-gray-100 text-gray-800 border-gray-200';
-    
+
     const severityLevel = severity.toLowerCase() as SeverityLevel;
     const colorMap: Record<SeverityLevel, string> = {
       critical: 'bg-red-100 text-red-800 border-red-200',
@@ -98,13 +141,13 @@ export default function AlertsPage() {
       medium: 'bg-yellow-100 text-yellow-800 border-yellow-200',
       low: 'bg-blue-100 text-blue-800 border-blue-200',
     };
-    
+
     return colorMap[severityLevel] || 'bg-gray-100 text-gray-800 border-gray-200';
   }, []);
 
   const getSeverityIcon = useCallback((severity: string): string => {
     if (!severity) return '📋';
-    
+
     const severityLevel = severity.toLowerCase() as SeverityLevel;
     const iconMap: Record<SeverityLevel, string> = {
       critical: '🚨',
@@ -112,13 +155,13 @@ export default function AlertsPage() {
       medium: '⚡',
       low: 'ℹ️',
     };
-    
+
     return iconMap[severityLevel] || '📋';
   }, []);
 
   const getEventIcon = useCallback((eventType: string): string => {
     if (!eventType) return '🔔';
-    
+
     const typeMap: Record<string, string> = {
       malware_detected: '🦠',
       phishing_detected: '🎣',
@@ -129,17 +172,17 @@ export default function AlertsPage() {
       privilege_escalation: '⬆️',
       data_breach: '💥',
     };
-    
+
     return typeMap[eventType.toLowerCase()] || '🔔';
   }, []);
 
   const formatDate = useCallback((dateString: string): string => {
     if (!dateString) return 'Unknown';
-    
+
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return 'Invalid date';
-      
+
       return new Intl.DateTimeFormat('en-US', {
         year: 'numeric',
         month: 'short',
@@ -156,11 +199,11 @@ export default function AlertsPage() {
 
   const getTimeAgo = useCallback((dateString: string): string => {
     if (!dateString) return 'Unknown';
-    
+
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return 'Invalid date';
-      
+
       const now = new Date();
       const diffSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
@@ -176,7 +219,7 @@ export default function AlertsPage() {
 
   const getSeverityBorderColor = useCallback((severity: string): string => {
     if (!severity) return 'border-l-gray-400';
-    
+
     const severityLevel = severity.toLowerCase() as SeverityLevel;
     const colorMap: Record<SeverityLevel, string> = {
       critical: 'border-l-red-500',
@@ -184,9 +227,30 @@ export default function AlertsPage() {
       medium: 'border-l-yellow-500',
       low: 'border-l-blue-500',
     };
-    
+
     return colorMap[severityLevel] || 'border-l-gray-400';
   }, []);
+
+  const toggleEventExpansion = useCallback((eventId: number) => {
+    setExpandedEvents(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(eventId)) {
+        newSet.delete(eventId);
+      } else {
+        newSet.add(eventId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  const filteredEvents = useMemo(() => {
+    if (sourceFilter === 'all') return events;
+    
+    return events.filter(event => {
+      const eventSource = getSourceFromEventType(event.event_type);
+      return eventSource === sourceFilter;
+    });
+  }, [events, sourceFilter, getSourceFromEventType]);
 
   const severityCounts = useMemo(() => {
     const counts: Record<SeverityLevel, number> = {
@@ -196,7 +260,7 @@ export default function AlertsPage() {
       low: 0,
     };
 
-    events.forEach(event => {
+    filteredEvents.forEach(event => {
       if (event.severity) {
         const severity = event.severity.toLowerCase() as SeverityLevel;
         if (severity in counts) {
@@ -206,30 +270,46 @@ export default function AlertsPage() {
     });
 
     return counts;
-  }, [events]);
+  }, [filteredEvents]);
+
+  const sourceCounts = useMemo(() => {
+    const counts: Record<SourceType, number> = {
+      all: events.length,
+      clamav: 0,
+      phishing: 0,
+      darkweb: 0,
+    };
+
+    events.forEach(event => {
+      const source = getSourceFromEventType(event.event_type);
+      counts[source]++;
+    });
+
+    return counts;
+  }, [events, getSourceFromEventType]);
 
   const sortedEvents = useMemo(() => {
-    return [...events].sort((a, b) => {
+    return [...filteredEvents].sort((a, b) => {
       const severityOrder: Record<string, number> = {
         critical: 4,
         high: 3,
         medium: 2,
         low: 1,
       };
-      
+
       const aSeverity = severityOrder[a.severity?.toLowerCase()] || 0;
       const bSeverity = severityOrder[b.severity?.toLowerCase()] || 0;
-      
+
       if (aSeverity !== bSeverity) {
         return bSeverity - aSeverity;
       }
-      
+
       const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
       const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
-      
+
       return bTime - aTime;
     });
-  }, [events]);
+  }, [filteredEvents]);
 
   const handleRefresh = useCallback(() => {
     void fetchEvents();
@@ -273,6 +353,23 @@ export default function AlertsPage() {
         </div>
       )}
 
+      <div className="mb-6 bg-white rounded-lg shadow-sm border p-4">
+        <label htmlFor="source-filter" className="block text-sm font-medium text-gray-700 mb-2">
+          Filter by Source
+        </label>
+        <select
+          id="source-filter"
+          value={sourceFilter}
+          onChange={(e) => setSourceFilter(e.target.value as SourceType)}
+          className="block w-full md:w-64 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        >
+          <option value="all">All Sources ({sourceCounts.all})</option>
+          <option value="clamav">🛡️ ClamAV - Malware ({sourceCounts.clamav})</option>
+          <option value="phishing">🎣 Phishing Detection ({sourceCounts.phishing})</option>
+          <option value="darkweb">🕷️ Dark Web Monitoring ({sourceCounts.darkweb})</option>
+        </select>
+      </div>
+
       {events.length > 0 && (
         <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {(Object.entries(severityCounts) as [SeverityLevel, number][]).map(([severity, count]) => {
@@ -282,99 +379,12 @@ export default function AlertsPage() {
               medium: 'bg-yellow-50 border-yellow-100 text-yellow-600',
               low: 'bg-blue-50 border-blue-100 text-blue-600',
             };
-            
+
             const textClasses = {
               critical: 'text-red-700',
               high: 'text-orange-700',
               medium: 'text-yellow-700',
               low: 'text-blue-700',
             };
-            
+
             return (
-              <div key={severity} className={`rounded-lg p-4 border ${colorClasses[severity]}`}>
-                <div className="text-sm font-medium capitalize">
-                  {severity}
-                </div>
-                <div className={`text-2xl font-bold ${textClasses[severity]}`}>
-                  {count}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {sortedEvents.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
-          <div className="text-green-400 text-6xl mb-4" aria-hidden="true">✅</div>
-          <h2 className="text-2xl font-semibold mb-3 text-gray-900">All Clear!</h2>
-          <p className="text-gray-600 text-lg">
-            No security alerts detected. Your systems are protected.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {sortedEvents.map((event) => (
-            <div
-              key={event.id}
-              className={`bg-white rounded-lg shadow-md border-l-4 p-6 hover:shadow-lg transition-shadow ${getSeverityBorderColor(event.severity)}`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-start space-x-4 flex-1">
-                  <div className="text-3xl flex-shrink-0" aria-hidden="true">
-                    {getEventIcon(event.event_type)}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-3 mb-3">
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getSeverityColor(event.severity)}`}>
-                        <span aria-hidden="true">{getSeverityIcon(event.severity)}</span>{' '}
-                        {event.severity ? event.severity.toUpperCase() : 'UNKNOWN'}
-                      </span>
-                      <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                        Agent #{event.agent_id}
-                      </span>
-                      <span className="text-sm text-gray-500">
-                        {getTimeAgo(event.created_at)}
-                      </span>
-                    </div>
-
-                    <h3 className="text-lg font-bold text-gray-900 mb-2 break-words">
-                      {event.description || 'Security Event'}
-                    </h3>
-
-                    {event.event_type && (
-                      <div className="text-sm text-gray-600 mb-3">
-                        <span className="font-medium">Event Type:</span>{' '}
-                        <span className="capitalize bg-gray-50 px-2 py-1 rounded">
-                          {event.event_type.replace(/_/g, ' ')}
-                        </span>
-                      </div>
-                    )}
-
-                    {event.details && Object.keys(event.details).length > 0 && (
-                      <details className="mt-4">
-                        <summary className="cursor-pointer text-sm text-blue-600 hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 font-medium select-none">
-                          View Technical Details
-                        </summary>
-                        <div className="mt-3 p-4 bg-gray-50 rounded-lg border">
-                          <pre className="whitespace-pre-wrap overflow-auto max-h-64 text-xs font-mono text-gray-700">
-                            {JSON.stringify(event.details, null, 2)}
-                          </pre>
-                        </div>
-                      </details>
-                    )}
-
-                    <div className="mt-4 pt-3 border-t border-gray-100 text-xs text-gray-500">
-                      <span className="font-medium">Detected:</span> {formatDate(event.created_at)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}

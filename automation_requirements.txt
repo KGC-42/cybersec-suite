@@ -1,0 +1,124 @@
+GUARDIANOS - COMPLETE UI REDESIGN REQUIREMENTS
+===============================================
+
+BRANDING:
+- App Name: GuardianOS (replace all "CyberSec" references)
+- Primary Color: Purple/Violet (#7c3aed)
+- Accent Color: Deep Purple (#6d28d9)
+- Success: Green (#10b981)
+- Warning: Yellow (#f59e0b)
+- Danger: Red (#ef4444)
+- Background: Very Dark Blue (#0f172a)
+- Card Background: Dark Slate (#1e293b)
+- Border: Slate (#334155)
+
+LAYOUT (app/dashboard/layout.tsx):
+- Fixed left sidebar, dark background (#1e293b)
+- Logo: Shield icon with "GuardianOS" text
+- Navigation items with icons:
+  * Home (home icon)
+  * Security (shield icon)
+  * Alerts (bell icon with badge if alerts exist)
+  * Reports (document icon)
+  * Settings (gear icon)
+- Logout button at bottom
+- Active state: Purple background (#7c3aed)
+- Hover state: Lighter background (#334155)
+- Mobile: Collapsible hamburger menu
+
+HOME PAGE (app/dashboard/page.tsx):
+- Large status banner at top:
+  * If secure: Green with checkmark "Your system is protected"
+  * If issues: Red with warning "Action required"
+- 4 Feature cards in grid (2x2 on desktop, 1 column mobile):
+  * Real-time Scans: Shield icon, show "Active" or last scan time
+  * Threats Blocked: Alert icon, show count from API
+  * Dark Web Monitoring: Globe icon, show "Monitoring" status
+  * System Health: Heart icon, show percentage
+- Quick Actions section with 3 buttons:
+  * Run Full Scan (purple button)
+  * View Reports (gray button)
+  * Update Settings (gray button)
+- Fetch real data from /api/v1/events/stats endpoint
+
+ALERTS PAGE (app/dashboard/alerts/page.tsx):
+- Keep existing functionality but improve styling:
+  * Source filter dropdown with purple accent
+  * Alert cards with left border (color by severity)
+  * Expandable breach details with smooth animation
+  * Empty state with shield icon "No alerts"
+- Fetch from /api/v1/events/ endpoint
+
+SECURITY PAGE (app/dashboard/security/page.tsx) - NEW:
+- Scan status section:
+  * Last scan time
+  * Next scheduled scan
+  * "Run Scan Now" button (purple)
+- Protection modules grid (2x2):
+  * ClamAV Antivirus: Toggle on/off, show status
+  * Phishing Protection: Toggle on/off, show blocked count
+  * Dark Web Monitoring: Toggle on/off, show monitored emails
+  * Real-time Protection: Toggle on/off, always-on indicator
+- Scan history table:
+  * Date, Type, Duration, Threats Found
+  * Click row to see details
+
+REPORTS PAGE (app/dashboard/reports/page.tsx) - NEW:
+- Weekly Report card:
+  * Show risk score (0-100) with color gradient
+  * Summary stats: Total events, by severity
+  * "Download PDF" button
+  * "Email Report" button
+- Report history list:
+  * Date range, Risk level, Actions
+- Generate report button (purple) that calls /api/v1/events/report/weekly
+
+SETTINGS PAGE (app/dashboard/settings/page.tsx) - NEW:
+- Account section:
+  * Email, Username
+  * Change password button
+- Notification preferences:
+  * Email alerts toggle
+  * Desktop notifications toggle
+  * Weekly reports toggle
+- Scan settings:
+  * Scan frequency dropdown (Daily, Weekly, Monthly)
+  * Scan depth (Quick, Full, Deep)
+- Dark Web monitoring:
+  * Add/remove emails to monitor
+  * List of monitored emails with remove button
+
+DESIGN PRINCIPLES:
+- Norton-inspired: Clean, professional, minimal
+- Consistent spacing: 4px, 8px, 16px, 24px, 32px
+- Rounded corners: 8px for cards, 12px for modals
+- Smooth transitions: 200ms for hover states
+- Loading states: Skeleton loaders or spinners
+- Empty states: Friendly icons and helpful text
+- Responsive: Mobile-first, works on all screen sizes
+- Accessibility: Proper labels, keyboard navigation, ARIA attributes
+
+COMPONENTS TO CREATE:
+1. StatusBanner.tsx - Reusable status display
+2. StatCard.tsx - Feature card component
+3. AlertCard.tsx - Individual alert display
+4. ScanHistoryTable.tsx - Scan history with pagination
+5. ToggleSwitch.tsx - Custom toggle for settings
+6. LoadingSpinner.tsx - Consistent loading indicator
+
+API ENDPOINTS TO USE:
+- GET /api/v1/events/ - List alerts
+- GET /api/v1/events/report/weekly - Weekly report
+- GET /api/v1/events/stats - Dashboard stats (need to create)
+- POST /api/v1/scan/run - Trigger scan (need to create)
+- GET /api/v1/settings - User settings (need to create)
+- PUT /api/v1/settings - Update settings (need to create)
+
+FUTURE FEATURES TO CONSIDER:
+- Real-time notifications via WebSocket
+- Multi-device management
+- Team/organization support
+- Custom alert rules
+- Integration with other security tools
+- Mobile app companion
+- Browser extension for phishing protection
