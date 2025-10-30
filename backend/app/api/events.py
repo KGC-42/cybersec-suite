@@ -35,6 +35,21 @@ async def ingest_event(
     )
     db.add(event)
     db.commit()
+    
+    # Auto-send email for critical/high severity alerts
+    if data.severity in ["critical", "high"]:
+        try:
+            await email_service.send_alert_email(
+                to_email="kgc78423@gmail.com",
+                subject=data.title,
+                alert_type=data.source,
+                severity=data.severity,
+                description=data.description or "Security threat detected",
+                details=data.details or {}
+            )
+        except Exception as e:
+            print(f"Failed to send email notification: {e}")
+    
     return {"id": event.id, "status": "created"}
 
 @router.get("/")
