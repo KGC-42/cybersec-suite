@@ -18,7 +18,7 @@ class EmailService:
         
         if provider == EmailProvider.RESEND:
             resend.api_key = os.getenv("RESEND_API_KEY")
-            self.from_email = "GuardianOS <alerts@updates.guardianos.com>"
+            self.from_email = "GuardianOS <onboarding@resend.dev>"
         # Easy to add AWS SES later:
         # elif provider == EmailProvider.AWS_SES:
         #     self.ses_client = boto3.client('ses')
