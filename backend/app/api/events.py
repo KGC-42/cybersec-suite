@@ -80,7 +80,7 @@ async def test_email_notification(
     """Test email notification system"""
     try:
         result = await email_service.send_alert_email(
-            to_email="Kgc78423@gmail.com",
+            to_email="kgc78423@gmail.com",
             subject="Test Alert",
             alert_type="Malware Detection",
             severity="high",
