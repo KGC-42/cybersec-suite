@@ -23,7 +23,7 @@ print("[DEBUG] Root directory added:", root_dir)
 
 # --- IMPORT YOUR MODELS ---
 try:
-    from packages.db.models import Base
+    from app.models.security import Base
     from app.models.security import Agent, SecurityEvent
     print("✅ Successfully imported models from packages.db.models and app.models.security")
 except ModuleNotFoundError as e:
