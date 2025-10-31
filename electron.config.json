@@ -1,0 +1,26 @@
+{
+  "app_name": "GuardianOS",
+  "app_id": "guardianos",
+  "app_url": "https://cybersec-suite-production.up.railway.app",
+  "window": {
+    "width": 1400,
+    "height": 900,
+    "min_width": 1024,
+    "min_height": 768,
+    "resizable": true,
+    "fullscreen": false
+  },
+  "tray": {
+    "enabled": true,
+    "minimize_to_tray": true
+  },
+  "auto_update": {
+    "enabled": true,
+    "update_url": "https://cybersec-suite-production.up.railway.app/api/v1/updates/check"
+  },
+  "build": {
+    "icon": "agent/icon.ico",
+    "platforms": ["windows"],
+    "output_dir": "dist"
+  }
+}

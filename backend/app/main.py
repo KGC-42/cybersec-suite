@@ -3,6 +3,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth
 from app.api import agents, events, scanner, phishing, breach
 
+# Multi-org system imports
+import sys
+from pathlib import Path
+
+# Add project root to path
+root_path = Path(__file__).parent.parent.parent.parent.parent
+if str(root_path) not in sys.path:
+    sys.path.insert(0, str(root_path))
+
+# Debug: Print path
+print(f"[DEBUG] Project root: {root_path}")
+print(f"[DEBUG] Packages path exists: {(root_path / 'packages').exists()}")
+
 # Create FastAPI app
 app = FastAPI(
     title="CyberSec Suite API",
@@ -24,7 +37,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
+# Include existing routers
 app.include_router(auth.router)
 app.include_router(agents.router)
 app.include_router(events.router)
@@ -32,7 +45,21 @@ app.include_router(scanner.router)
 app.include_router(phishing.router)
 app.include_router(breach.router)
 
-# Health check endpoint
+# Configure and include multi-org router
+from packages.multi_org.backend.router import router as org_router
+from app.database import get_db as app_get_db
+from app.auth import get_current_user as app_get_current_user
+
+# Override dependencies at app level
+app.dependency_overrides = {
+    "get_db": app_get_db,
+    "get_current_user": app_get_current_user
+}
+
+# Include multi-org router
+app.include_router(org_router)
+
+# Health check endpoints
 @app.get("/")
 def root():
     return {"message": "CyberSec Suite API is running", "status": "healthy"}

@@ -1,0 +1,49 @@
+{
+  "app_name": "GuardianOS",
+  "app_id": "guardianos",
+  "version": "1.0.0",
+  "publisher": "GuardianOS Security",
+  "website": "https://cybersec-suite-production.up.railway.app",
+  "icon": "agent/icon.ico",
+  "components": [
+    {
+      "type": "python_agent",
+      "name": "GuardianOS Agent",
+      "path": "agent/",
+      "dependencies": ["clamav"],
+      "auto_start": true,
+      "required": true
+    },
+    {
+      "type": "desktop_shortcut",
+      "name": "GuardianOS Dashboard",
+      "url": "https://cybersec-suite-production.up.railway.app/dashboard",
+      "required": false
+    },
+    {
+      "type": "desktop_shortcut",
+      "name": "GuardianOS Password Vault",
+      "url": "https://server-production-f96b.up.railway.app",
+      "required": false
+    },
+    {
+      "type": "web_app_link",
+      "name": "Install Bitwarden Extension",
+      "url": "https://bitwarden.com/download/",
+      "required": false
+    }
+  ],
+  "auto_update": {
+    "enabled": true,
+    "update_url": "https://cybersec-suite-production.up.railway.app/api/v1/updates/check",
+    "check_interval_hours": 24
+  },
+  "install_options": {
+    "default_dir": "{pf}\\GuardianOS",
+    "shortcuts": {
+      "desktop": true,
+      "start_menu": true
+    },
+    "uninstaller": true
+  }
+}

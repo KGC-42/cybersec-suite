@@ -1,0 +1,30 @@
+{
+  "app_id": "cybersec-suite",
+  "app_name": "Cybersec-Suite",
+  "features": {
+    "multi_org": true,
+    "invitations": true,
+    "role_based_access": true
+  },
+  "roles": [
+    "owner",
+    "admin",
+    "member",
+    "viewer"
+  ],
+  "default_role": "member",
+  "plans": {
+    "free": {
+      "max_members": 3,
+      "max_resources": 5
+    },
+    "pro": {
+      "max_members": 10,
+      "max_resources": 25
+    },
+    "enterprise": {
+      "max_members": -1,
+      "max_resources": -1
+    }
+  }
+}
