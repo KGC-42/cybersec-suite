@@ -8,26 +8,24 @@ import sys
 import os
 from pathlib import Path
 
-# In Railway, packages is at /app/packages. Locally it's 5 levels up.
-if Path("/app/packages").exists():
-    # Railway environment
-    sys.path.insert(0, "/app")
-    print("[DEBUG] Railway environment detected - added /app to sys.path")
-else:
-    # Local environment
-    root_path = Path(__file__).parent.parent.parent.parent.parent
-    if str(root_path) not in sys.path:
-        sys.path.insert(0, str(root_path))
-    print(f"[DEBUG] Local environment - added {root_path} to sys.path")
+# Add packages to path - works for both Railway and local
+backend_packages = Path(__file__).parent.parent / "packages"
+root_packages = Path(__file__).parent.parent.parent.parent.parent / "packages"
 
-# Debug Railway environment
+if backend_packages.exists():
+    # Packages in backend folder (Railway deployment)
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    print(f"[DEBUG] Found packages in backend: {backend_packages}")
+elif root_packages.exists():
+    # Packages in SAAS Scaffolding root (Local development)
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
+    print(f"[DEBUG] Found packages in root: {root_packages}")
+else:
+    print("[WARNING] Could not find packages folder!")
+
+# Debug info
 print(f"[DEBUG] Current working directory: {os.getcwd()}")
 print(f"[DEBUG] sys.path (first 3): {sys.path[:3]}")
-if os.path.exists('/app'):
-    print(f"[DEBUG] Files in /app: {os.listdir('/app')[:10]}")
-    print(f"[DEBUG] Packages exists: {os.path.exists('/app/packages')}")
-    if os.path.exists('/app/packages'):
-        print(f"[DEBUG] Packages contents: {os.listdir('/app/packages')}")
 
 # Create FastAPI app
 app = FastAPI(
