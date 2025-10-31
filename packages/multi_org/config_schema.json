@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["app_id", "app_name"],
+  "properties": {
+    "app_id": {
+      "type": "string",
+      "description": "Unique identifier for your app",
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "app_name": {
+      "type": "string",
+      "description": "Display name for your app"
+    },
+    "features": {
+      "type": "object",
+      "properties": {
+        "multi_org": {"type": "boolean", "default": true},
+        "invitations": {"type": "boolean", "default": true},
+        "role_based_access": {"type": "boolean", "default": true}
+      }
+    },
+    "roles": {
+      "type": "array",
+      "items": {"type": "string"},
+      "default": ["owner", "admin", "member", "viewer"]
+    },
+    "default_role": {
+      "type": "string",
+      "default": "member"
+    },
+    "plans": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "max_members": {"type": "integer"},
+          "max_resources": {"type": "integer"}
+        }
+      }
+    }
+  }
+}
