@@ -7,14 +7,15 @@ from app.api import agents, events, scanner, phishing, breach
 import sys
 from pathlib import Path
 
-# Add project root to path
-root_path = Path(__file__).parent.parent.parent.parent.parent
-if str(root_path) not in sys.path:
-    sys.path.insert(0, str(root_path))
-
-# Debug: Print path
-print(f"[DEBUG] Project root: {root_path}")
-print(f"[DEBUG] Packages path exists: {(root_path / 'packages').exists()}")
+# In Railway, packages is at /app/packages. Locally it's 5 levels up.
+if Path("/app/packages").exists():
+    # Railway environment
+    sys.path.insert(0, "/app")
+else:
+    # Local environment
+    root_path = Path(__file__).parent.parent.parent.parent.parent
+    if str(root_path) not in sys.path:
+        sys.path.insert(0, str(root_path))
 
 # Create FastAPI app
 app = FastAPI(
