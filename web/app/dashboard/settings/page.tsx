@@ -1,0 +1,272 @@
+"use client";
+
+import React, { useState } from 'react';
+
+interface SettingsState {
+  emailAlerts: boolean;
+  scanFrequency: string;
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+  notifications: {
+    security: boolean;
+    system: boolean;
+    updates: boolean;
+  };
+}
+
+export default function SettingsPage() {
+  const [settings, setSettings] = useState<SettingsState>({
+    emailAlerts: true,
+    scanFrequency: 'daily',
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+    notifications: {
+      security: true,
+      system: true,
+      updates: false
+    }
+  });
+
+  const [activeTab, setActiveTab] = useState('account');
+
+  const handleSettingChange = (key: keyof SettingsState, value: any) => {
+    setSettings(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  const handleNotificationChange = (key: keyof SettingsState['notifications']) => {
+    setSettings(prev => ({
+      ...prev,
+      notifications: {
+        ...prev.notifications,
+        [key]: !prev.notifications[key]
+      }
+    }));
+  };
+
+  const handlePasswordChange = () => {
+    if (settings.newPassword !== settings.confirmPassword) {
+      alert('Passwords do not match');
+      return;
+    }
+    console.log('Password updated');
+    setSettings(prev => ({
+      ...prev,
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: ''
+    }));
+  };
+
+  const handleSaveSettings = () => {
+    console.log('Settings saved:', settings);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white p-6">
+      <div className="max-w-6xl mx-auto">
+        <header className="mb-8">
+          <h1 className="text-3xl font-bold text-cyan-400 mb-2">GuardianOS Settings</h1>
+          <p className="text-gray-400">Configure your cybersec-suite preferences</p>
+        </header>
+
+        <div className="bg-gray-800 rounded-lg shadow-lg">
+          <div className="flex border-b border-gray-700">
+            <button
+              onClick={() => setActiveTab('account')}
+              className={`px-6 py-4 font-medium ${
+                activeTab === 'account'
+                  ? 'text-cyan-400 border-b-2 border-cyan-400'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Account
+            </button>
+            <button
+              onClick={() => setActiveTab('notifications')}
+              className={`px-6 py-4 font-medium ${
+                activeTab === 'notifications'
+                  ? 'text-cyan-400 border-b-2 border-cyan-400'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Notifications
+            </button>
+            <button
+              onClick={() => setActiveTab('security')}
+              className={`px-6 py-4 font-medium ${
+                activeTab === 'security'
+                  ? 'text-cyan-400 border-b-2 border-cyan-400'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Security
+            </button>
+          </div>
+
+          <div className="p-6">
+            {activeTab === 'account' && (
+              <div className="space-y-6">
+                <h2 className="text-xl font-semibold mb-4">Account Settings</h2>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Current Password</label>
+                    <input
+                      type="password"
+                      value={settings.currentPassword}
+                      onChange={(e) => handleSettingChange('currentPassword', e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-cyan-400 focus:border-transparent"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-2">New Password</label>
+                    <input
+                      type="password"
+                      value={settings.newPassword}
+                      onChange={(e) => handleSettingChange('newPassword', e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-cyan-400 focus:border-transparent"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Confirm New Password</label>
+                    <input
+                      type="password"
+                      value={settings.confirmPassword}
+                      onChange={(e) => handleSettingChange('confirmPassword', e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-cyan-400 focus:border-transparent"
+                    />
+                  </div>
+                  
+                  <button
+                    onClick={handlePasswordChange}
+                    className="bg-cyan-600 hover:bg-cyan-700 px-4 py-2 rounded-lg font-medium"
+                  >
+                    Update Password
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'notifications' && (
+              <div className="space-y-6">
+                <h2 className="text-xl font-semibold mb-4">Notification Settings</h2>
+                
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between py-3 border-b border-gray-700">
+                    <div>
+                      <h3 className="font-medium">Email Alerts</h3>
+                      <p className="text-sm text-gray-400">Receive security alerts via email</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settings.emailAlerts}
+                        onChange={(e) => handleSettingChange('emailAlerts', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-cyan-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+                    </label>
+                  </div>
+
+                  <div className="flex items-center justify-between py-3 border-b border-gray-700">
+                    <div>
+                      <h3 className="font-medium">Security Notifications</h3>
+                      <p className="text-sm text-gray-400">Get notified about security events</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settings.notifications.security}
+                        onChange={() => handleNotificationChange('security')}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-cyan-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+                    </label>
+                  </div>
+
+                  <div className="flex items-center justify-between py-3 border-b border-gray-700">
+                    <div>
+                      <h3 className="font-medium">System Notifications</h3>
+                      <p className="text-sm text-gray-400">System status and maintenance alerts</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settings.notifications.system}
+                        onChange={() => handleNotificationChange('system')}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-cyan-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+                    </label>
+                  </div>
+
+                  <div className="flex items-center justify-between py-3">
+                    <div>
+                      <h3 className="font-medium">Update Notifications</h3>
+                      <p className="text-sm text-gray-400">Software and definition updates</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settings.notifications.updates}
+                        onChange={() => handleNotificationChange('updates')}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-cyan-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'security' && (
+              <div className="space-y-6">
+                <h2 className="text-xl font-semibold mb-4">Security Settings</h2>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Scan Frequency</label>
+                    <select
+                      value={settings.scanFrequency}
+                      onChange={(e) => handleSettingChange('scanFrequency', e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-cyan-400 focus:border-transparent"
+                    >
+                      <option value="hourly">Every Hour</option>
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                  </div>
+
+                  <div className="bg-gray-700 p-4 rounded-lg">
+                    <h3 className="font-medium mb-2">Current Security Status</h3>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 bg-green-400 rounded-full"></div>
+                      <span className="text-sm">All systems operational</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-8 pt-6 border-t border-gray-700">
+              <button
+                onClick={handleSaveSettings}
+                className="bg-cyan-600 hover:bg-cyan-700 px-6 py-3 rounded-lg font-medium"
+              >
+                Save Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

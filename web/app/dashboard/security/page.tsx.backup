@@ -1,0 +1,344 @@
+"use client";
+
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { 
+  Shield, 
+  Scan, 
+  Eye, 
+  Globe, 
+  Activity, 
+  AlertTriangle,
+  CheckCircle,
+  Play,
+  Pause
+} from 'lucide-react';
+
+interface SecurityFeature {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  status: 'active' | 'inactive' | 'scanning' | 'error';
+  icon: React.ComponentType<any>;
+}
+
+interface ScanResult {
+  type: string;
+  threatsFound: number;
+  lastScan: Date;
+  progress?: number;
+  isScanning: boolean;
+}
+
+export default function SecurityPage() {
+  const [securityFeatures, setSecurityFeatures] = useState<SecurityFeature[]>([
+    {
+      id: 'guardian-os',
+      name: 'GuardianOS',
+      description: 'Core security operating system protection',
+      enabled: true,
+      status: 'active',
+      icon: Shield
+    },
+    {
+      id: 'clamav',
+      name: 'ClamAV Scanner',
+      description: 'Antivirus and malware detection',
+      enabled: true,
+      status: 'active',
+      icon: Scan
+    },
+    {
+      id: 'phishing-protection',
+      name: 'Phishing Protection',
+      description: 'Real-time phishing detection and blocking',
+      enabled: true,
+      status: 'active',
+      icon: Eye
+    },
+    {
+      id: 'dark-web-monitoring',
+      name: 'Dark Web Monitoring',
+      description: 'Monitor for compromised credentials',
+      enabled: false,
+      status: 'inactive',
+      icon: Globe
+    },
+    {
+      id: 'real-time-protection',
+      name: 'Real-time Protection',
+      description: 'Continuous threat monitoring',
+      enabled: true,
+      status: 'active',
+      icon: Activity
+    }
+  ]);
+
+  const [scanResults, setScanResults] = useState<ScanResult[]>([
+    {
+      type: 'Full System Scan',
+      threatsFound: 0,
+      lastScan: new Date(Date.now() - 3600000),
+      progress: 100,
+      isScanning: false
+    },
+    {
+      type: 'Quick Scan',
+      threatsFound: 2,
+      lastScan: new Date(Date.now() - 1800000),
+      progress: 100,
+      isScanning: false
+    },
+    {
+      type: 'Dark Web Scan',
+      threatsFound: 1,
+      lastScan: new Date(Date.now() - 7200000),
+      progress: 45,
+      isScanning: true
+    }
+  ]);
+
+  const toggleFeature = (featureId: string) => {
+    setSecurityFeatures(prev =>
+      prev.map(feature =>
+        feature.id === featureId
+          ? {
+              ...feature,
+              enabled: !feature.enabled,
+              status: !feature.enabled ? 'active' : 'inactive'
+            }
+          : feature
+      )
+    );
+  };
+
+  const startScan = (scanType: string) => {
+    setScanResults(prev =>
+      prev.map(scan =>
+        scan.type === scanType
+          ? { ...scan, isScanning: true, progress: 0 }
+          : scan
+      )
+    );
+
+    // Simulate scan progress
+    const interval = setInterval(() => {
+      setScanResults(prev =>
+        prev.map(scan => {
+          if (scan.type === scanType && scan.isScanning) {
+            const newProgress = Math.min((scan.progress || 0) + 10, 100);
+            if (newProgress === 100) {
+              clearInterval(interval);
+              return {
+                ...scan,
+                progress: 100,
+                isScanning: false,
+                lastScan: new Date(),
+                threatsFound: Math.floor(Math.random() * 5)
+              };
+            }
+            return { ...scan, progress: newProgress };
+          }
+          return scan;
+        })
+      );
+    }, 500);
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'text-green-600';
+      case 'scanning': return 'text-blue-600';
+      case 'error': return 'text-red-600';
+      default: return 'text-gray-500';
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'active':
+        return <Badge className="bg-green-100 text-green-800">Active</Badge>;
+      case 'scanning':
+        return <Badge className="bg-blue-100 text-blue-800">Scanning</Badge>;
+      case 'error':
+        return <Badge className="bg-red-100 text-red-800">Error</Badge>;
+      default:
+        return <Badge className="bg-gray-100 text-gray-800">Inactive</Badge>;
+    }
+  };
+
+  const activeFeaturesCount = securityFeatures.filter(f => f.enabled).length;
+  const totalThreats = scanResults.reduce((sum, scan) => sum + scan.threatsFound, 0);
+
+  return (
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-white">Security Dashboard</h1>
+          <p className="text-gray-600 mt-2">Monitor and manage your cybersecurity protection</p>
+        </div>
+        <div className="flex items-center space-x-4">
+          <Button onClick={() => startScan('Quick Scan')} className="flex items-center space-x-2">
+            <Scan className="w-4 h-4" />
+            <span>Quick Scan</span>
+          </Button>
+          <Button variant="outline" onClick={() => startScan('Full System Scan')} className="flex items-center space-x-2">
+            <Shield className="w-4 h-4" />
+            <span>Full Scan</span>
+          </Button>
+        </div>
+      </div>
+
+      {totalThreats > 0 && (
+        <Alert className="border-red-200 bg-red-50">
+          <AlertTriangle className="h-4 w-4 text-red-600" />
+          <AlertDescription className="text-red-800">
+            {totalThreats} security threat{totalThreats > 1 ? 's' : ''} detected. Please review scan results below.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <Shield className="w-6 h-6 text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Active Protection</p>
+                <p className="text-2xl font-bold">{activeFeaturesCount}/{securityFeatures.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-red-100 rounded-lg">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Threats Detected</p>
+                <p className="text-2xl font-bold">{totalThreats}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Activity className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">System Status</p>
+                <p className="text-2xl font-bold text-green-600">Protected</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Shield className="w-5 h-5" />
+              <span>Security Features</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {securityFeatures.map((feature) => {
+                const IconComponent = feature.icon;
+                return (
+                  <div key={feature.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <IconComponent className={`w-5 h-5 ${getStatusColor(feature.status)}`} />
+                      <div>
+                        <h3 className="font-medium">{feature.name}</h3>
+                        <p className="text-sm text-gray-600">{feature.description}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      {getStatusBadge(feature.status)}
+                      <Switch
+                        checked={feature.enabled}
+                        onCheckedChange={() => toggleFeature(feature.id)}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Scan className="w-5 h-5" />
+              <span>Recent Scans</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {scanResults.map((scan, index) => (
+                <div key={index} className="p-4 border rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <h3 className="font-medium">{scan.type}</h3>
+                      <p className="text-sm text-gray-600">
+                        Last scan: {scan.lastScan.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      {scan.threatsFound > 0 ? (
+                        <Badge className="bg-red-100 text-red-800">
+                          {scan.threatsFound} threats
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-green-100 text-green-800">
+                          Clean
+                        </Badge>
+                      )}
+                      {scan.isScanning ? (
+                        <Pause className="w-4 h-4 text-blue-600" />
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => startScan(scan.type)}
+                        >
+                          <Play className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {scan.isScanning && (
+                    <div className="mt-2">
+                      <div className="flex items-center justify-between text-sm mb-1">
+                        <span>Scanning...</span>
+                        <span>{scan.progress}%</span>
+                      </div>
+                      <Progress value={scan.progress} className="h-2" />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

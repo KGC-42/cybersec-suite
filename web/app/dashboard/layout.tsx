@@ -1,0 +1,225 @@
+"use client";
+
+import { useState, useCallback, useEffect } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import { KeyRound } from 'lucide-react';
+import { 
+  HomeIcon, 
+  LockClosedIcon, 
+  BellIcon, 
+  DocumentTextIcon, 
+  CogIcon,
+  ArrowLeftOnRectangleIcon,
+  Bars3Icon,
+  XMarkIcon,
+  ShieldCheckIcon,
+  UsersIcon
+} from '@heroicons/react/24/outline';
+
+const sidebarItems = [
+  { name: 'Home', href: '/dashboard', icon: HomeIcon },
+  { name: 'Security', href: '/dashboard/security', icon: LockClosedIcon },
+  { name: 'Alerts', href: '/dashboard/alerts', icon: BellIcon },
+  { name: 'Reports', href: '/dashboard/reports', icon: DocumentTextIcon },
+  { name: 'Password Vault', href: '/dashboard/vault', icon: KeyRound },
+  { name: 'Team', href: '/dashboard/team', icon: UsersIcon },
+  { name: 'Settings', href: '/dashboard/settings', icon: CogIcon },
+] as const;
+
+interface DashboardLayoutProps {
+  children: React.ReactNode;
+}
+
+export default function DashboardLayout({ children }: DashboardLayoutProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
+
+  const closeSidebar = useCallback(() => {
+    setSidebarOpen(false);
+  }, []);
+
+  const openSidebar = useCallback(() => {
+    setSidebarOpen(true);
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        sessionStorage.clear();
+      }
+      router.push('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+    }
+  }, [router]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') {
+      closeSidebar();
+    }
+  }, [closeSidebar]);
+
+  const handleOverlayClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      closeSidebar();
+    }
+  }, [closeSidebar]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted || typeof window === 'undefined') return;
+    
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [mounted]);
+
+  useEffect(() => {
+    if (!mounted || typeof document === 'undefined') return;
+    
+    const cleanup = () => {
+      if (typeof document !== 'undefined') {
+        document.body.style.overflow = '';
+      }
+    };
+
+    if (sidebarOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      cleanup();
+    }
+
+    return cleanup;
+  }, [sidebarOpen, mounted]);
+
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex">
+        <div className="hidden lg:block w-64 bg-slate-800" />
+        <main className="flex-1 bg-slate-900">
+          <div className="animate-pulse p-6">
+            <div className="h-4 bg-slate-700 rounded w-1/4 mb-4" />
+            <div className="h-4 bg-slate-700 rounded w-1/2 mb-4" />
+            <div className="h-4 bg-slate-700 rounded w-1/3" />
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-900 flex">
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
+          onClick={handleOverlayClick}
+          onKeyDown={handleKeyDown}
+          role="button"
+          tabIndex={0}
+          aria-label="Close sidebar overlay"
+        />
+      )}
+
+      <aside 
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-800 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:relative lg:z-auto ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+        aria-label="Sidebar navigation"
+      >
+        <div className="flex items-center justify-between h-16 px-6 border-b border-slate-700">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 bg-violet-600 rounded-lg flex items-center justify-center">
+              <ShieldCheckIcon className="w-5 h-5 text-white" />
+            </div>
+            <span className="text-xl font-bold text-white">GuardianOS</span>
+          </div>
+          <button
+            onClick={closeSidebar}
+            className="lg:hidden text-slate-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 rounded-lg p-1"
+            aria-label="Close sidebar"
+            type="button"
+          >
+            <XMarkIcon className="w-6 h-6" />
+          </button>
+        </div>
+
+        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto" role="navigation">
+          <div className="space-y-2">
+            {sidebarItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname?.startsWith(item.href));
+              
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  onClick={closeSidebar}
+                  className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-slate-800 ${
+                    isActive
+                      ? 'bg-violet-600 text-white shadow-lg'
+                      : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                  }`}
+                  aria-current={isActive ? 'page' : undefined}
+                >
+                  <Icon className="w-5 h-5 mr-3 flex-shrink-0" aria-hidden="true" />
+                  {item.name}
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+
+        <div className="p-4 border-t border-slate-700">
+          <button
+            onClick={handleLogout}
+            className="flex items-center w-full px-4 py-3 text-sm font-medium text-slate-300 rounded-lg hover:bg-slate-700 hover:text-white transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-slate-800"
+            aria-label="Logout from application"
+            type="button"
+          >
+            <ArrowLeftOnRectangleIcon className="w-5 h-5 mr-3 flex-shrink-0" aria-hidden="true" />
+            Logout
+          </button>
+        </div>
+      </aside>
+
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="flex items-center justify-between h-16 px-6 bg-slate-800 border-b border-slate-700 lg:hidden">
+          <button
+            onClick={openSidebar}
+            className="text-slate-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 rounded-lg p-1"
+            aria-label="Open sidebar"
+            type="button"
+          >
+            <Bars3Icon className="w-6 h-6" />
+          </button>
+          <div className="flex items-center space-x-2">
+            <div className="w-6 h-6 bg-violet-600 rounded flex items-center justify-center">
+              <ShieldCheckIcon className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-lg font-bold text-white">GuardianOS</span>
+          </div>
+          <div className="w-6" aria-hidden="true" />
+        </header>
+
+        <main className="flex-1 bg-slate-900 overflow-auto" role="main">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
