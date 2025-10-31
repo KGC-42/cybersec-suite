@@ -12,3 +12,4 @@ celery==5.3.4
 httpx==0.25.2
 requests
 resend 
+email-validator
