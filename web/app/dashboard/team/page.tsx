@@ -1,13 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Organization, OrganizationMember } from './types';
-import { getOrganization, getMembers } from './api';
+import { getOrganization, getMembers, createOrganization } from './api';
 import { OrgSwitcher } from './components/OrgSwitcher';
 import { MemberList } from './components/MemberList';
 import { InviteModal } from './components/InviteModal';
 
 export default function TeamPage() {
+  const router = useRouter();
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [members, setMembers] = useState<OrganizationMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,7 +22,6 @@ export default function TeamPage() {
   }, []);
 
   async function loadCurrentUser() {
-    // Get current user from localStorage (set during login)
     const userStr = localStorage.getItem('user');
     if (userStr) {
       const user = JSON.parse(userStr);
@@ -65,20 +66,60 @@ export default function TeamPage() {
 
   if (!organization) {
     return (
-      <div className="p-8">
-        <div className="text-center py-12">
-          <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-            No Organization Found
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">
-            You need to create or join an organization first.
-          </p>
-          <button
-            onClick={() => window.location.href = '/dashboard'}
-            className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg"
-          >
-            Go to Dashboard
-          </button>
+      <div className="flex items-center justify-center min-h-screen p-6">
+        <div className="max-w-md w-full bg-slate-800 rounded-lg p-8 shadow-xl">
+          <h2 className="text-2xl font-bold text-white mb-2">Create Your Organization</h2>
+          <p className="text-slate-400 mb-6">Get started by creating your first organization.</p>
+          
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            const name = formData.get('name') as string;
+            const slug = formData.get('slug') as string;
+            
+            try {
+              const org = await createOrganization({ name, slug });
+              localStorage.setItem('currentOrgId', org.id);
+              window.location.reload();
+            } catch (error: any) {
+              alert(error.response?.data?.detail || 'Failed to create organization');
+            }
+          }} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Organization Name
+              </label>
+              <input
+                type="text"
+                name="name"
+                required
+                placeholder="Acme Inc"
+                className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                URL Slug
+              </label>
+              <input
+                type="text"
+                name="slug"
+                required
+                placeholder="acme-inc"
+                pattern="[a-z0-9-]+"
+                className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500"
+              />
+              <p className="text-xs text-slate-500 mt-1">Lowercase letters, numbers, and hyphens only</p>
+            </div>
+            
+            <button
+              type="submit"
+              className="w-full px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 font-medium"
+            >
+              Create Organization
+            </button>
+          </form>
         </div>
       </div>
     );
@@ -87,7 +128,6 @@ export default function TeamPage() {
   return (
     <div className="p-8">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
@@ -100,7 +140,6 @@ export default function TeamPage() {
           <OrgSwitcher />
         </div>
 
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
             <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
@@ -137,7 +176,6 @@ export default function TeamPage() {
           </div>
         </div>
 
-        {/* Members Section */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
           <div className="p-6 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
