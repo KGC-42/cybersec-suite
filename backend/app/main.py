@@ -34,15 +34,10 @@ app = FastAPI(
     description="Cybersecurity monitoring platform"
 )
 
-# CORS configuration - Allow ALL origins for now
+# CORS configuration - Allow ALL origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://cybersec-suite-7kezygy9e-kyle-collins-projects.vercel.app",
-        "https://cybersec-suite.vercel.app",
-        "http://localhost:3000",
-        "*"
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
